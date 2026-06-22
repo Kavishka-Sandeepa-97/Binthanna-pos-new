@@ -284,3 +284,34 @@ CREATE TABLE IF NOT EXISTS stock_transaction (
 2. The status chip should show **Syncing...** and then change to **Synced Successfully** once it completes (usually 1-3 seconds).
 3. If there is a connection issue, it will display **Sync Error** with a detailed error log directly in the panel.
 4. Once successful, visit your Supabase dashboard **Table Editor** to view your synchronized SQLite tables and POS transactions!
+
+---
+
+## Resetting Cloud Data (Supabase Truncate)
+
+If you ever need to clear all data from Supabase to perform a clean resync from scratch, copy and run this SQL script in your **Supabase SQL Editor**:
+
+```sql
+TRUNCATE TABLE 
+  users, 
+  cashier_shift, 
+  brand, 
+  category, 
+  item, 
+  variant, 
+  item_variant, 
+  global_discount_settings, 
+  orders, 
+  item_variant_order, 
+  returns, 
+  sell_price_history, 
+  in_out, 
+  supplier, 
+  stock_batch, 
+  stock_unit, 
+  stock_category, 
+  stock_supplier, 
+  stock_product, 
+  stock_transaction 
+CASCADE;
+```
