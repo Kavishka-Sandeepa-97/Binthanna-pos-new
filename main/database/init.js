@@ -326,7 +326,8 @@ const createTables = () => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS stock_unit (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE
+      name TEXT NOT NULL UNIQUE,
+      is_synced BOOLEAN DEFAULT 0
     )
   `);
 
@@ -334,7 +335,8 @@ const createTables = () => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS stock_category (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE
+      name TEXT NOT NULL UNIQUE,
+      is_synced BOOLEAN DEFAULT 0
     )
   `);
 
@@ -343,7 +345,8 @@ const createTables = () => {
     CREATE TABLE IF NOT EXISTS stock_supplier (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      description TEXT
+      description TEXT,
+      is_synced BOOLEAN DEFAULT 0
     )
   `);
 
@@ -355,6 +358,7 @@ const createTables = () => {
       category_id INTEGER NOT NULL,
       unit_id INTEGER NOT NULL,
       current_qty DECIMAL(10,2) DEFAULT 0,
+      is_synced BOOLEAN DEFAULT 0,
       FOREIGN KEY (category_id) REFERENCES stock_category(id),
       FOREIGN KEY (unit_id) REFERENCES stock_unit(id)
     )
@@ -372,6 +376,7 @@ const createTables = () => {
       price DECIMAL(10,2),
       qty DECIMAL(10,2) NOT NULL,
       user_id INTEGER NOT NULL,
+      is_synced BOOLEAN DEFAULT 0,
       FOREIGN KEY (product_id) REFERENCES stock_product(id),
       FOREIGN KEY (supplier_id) REFERENCES stock_supplier(id),
       FOREIGN KEY (user_id) REFERENCES users(id)
