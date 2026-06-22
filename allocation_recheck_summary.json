@@ -1,0 +1,70 @@
+﻿{
+    "ok":  true,
+    "variant_id":  657,
+    "variant_barcode":  "200967446458963",
+    "sale_order_id":  23,
+    "sale_order_barcode":  "10065663",
+    "sale_allocation_count":  1,
+    "sale_first_allocation":  {
+                                  "stock_batch_id":  666,
+                                  "qty":  1,
+                                  "batch_buy_price":  120,
+                                  "batch_sell_price":  120
+                              },
+    "return_order_id":  24,
+    "return_order_barcode":  "03890590",
+    "return_allocation_count":  1,
+    "return_first_allocation":  {
+                                    "stock_batch_id":  670,
+                                    "qty":  1,
+                                    "batch_buy_price":  120,
+                                    "batch_sell_price":  120
+                                },
+    "recent_movement_count":  8,
+    "recent_movement_preview":  [
+                                    {
+                                        "type":  "IN",
+                                        "quantity":  1,
+                                        "price":  120,
+                                        "buy_price":  120,
+                                        "sell_price":  120,
+                                        "created_at":  "2026-03-20T10:32:24.801Z",
+                                        "reference_id":  670,
+                                        "description":  "Return stock from order #23",
+                                        "staff_name":  "System"
+                                    },
+                                    {
+                                        "type":  "OUT",
+                                        "quantity":  1,
+                                        "price":  120,
+                                        "buy_price":  120,
+                                        "sell_price":  120,
+                                        "created_at":  "2026-03-20T10:32:24.800Z",
+                                        "reference_id":  24,
+                                        "description":  "Order #24 / Batch #670",
+                                        "staff_name":  "Admin"
+                                    },
+                                    {
+                                        "type":  "OUT",
+                                        "quantity":  1,
+                                        "price":  120,
+                                        "buy_price":  120,
+                                        "sell_price":  120,
+                                        "created_at":  "2026-03-20T10:32:24.793Z",
+                                        "reference_id":  23,
+                                        "description":  "Order #23 / Batch #666",
+                                        "staff_name":  "Admin"
+                                    },
+                                    {
+                                        "type":  "OUT",
+                                        "quantity":  1,
+                                        "price":  120,
+                                        "buy_price":  120,
+                                        "sell_price":  120,
+                                        "created_at":  "2026-03-20T10:30:15.567Z",
+                                        "reference_id":  22,
+                                        "description":  "Order #22 / Batch #669",
+                                        "staff_name":  "Admin"
+                                    }
+                                ]
+}
