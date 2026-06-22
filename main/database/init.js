@@ -322,6 +322,62 @@ const createTables = () => {
     )
   `);
 
+  // Stock Unit table (for stock management)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stock_unit (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE
+    )
+  `);
+
+  // Stock Category table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stock_category (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE
+    )
+  `);
+
+  // Stock Supplier table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stock_supplier (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT
+    )
+  `);
+
+  // Stock Product table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stock_product (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      category_id INTEGER NOT NULL,
+      unit_id INTEGER NOT NULL,
+      current_qty DECIMAL(10,2) DEFAULT 0,
+      FOREIGN KEY (category_id) REFERENCES stock_category(id),
+      FOREIGN KEY (unit_id) REFERENCES stock_unit(id)
+    )
+  `);
+
+  // Stock Transaction table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stock_transaction (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      supplier_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      description TEXT,
+      type TEXT CHECK(type IN ('IN', 'OUT')) NOT NULL,
+      price DECIMAL(10,2),
+      qty DECIMAL(10,2) NOT NULL,
+      user_id INTEGER NOT NULL,
+      FOREIGN KEY (product_id) REFERENCES stock_product(id),
+      FOREIGN KEY (supplier_id) REFERENCES stock_supplier(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+
   // Insert default admin user
   insertDefaultData();
 };
@@ -356,7 +412,11 @@ const createIndexes = () => {
     'CREATE INDEX IF NOT EXISTS idx_stock_batch_is_returned ON stock_batch(is_returned)',
     'CREATE INDEX IF NOT EXISTS idx_returns_order ON returns(order_id)',
     'CREATE INDEX IF NOT EXISTS idx_returns_item_variant_order ON returns(item_variant_order_id)',
-    'CREATE INDEX IF NOT EXISTS idx_returns_user ON returns(user_id)'
+    'CREATE INDEX IF NOT EXISTS idx_returns_user ON returns(user_id)',
+    // Stock management indexes
+    'CREATE INDEX IF NOT EXISTS idx_stock_product_category ON stock_product(category_id)',
+    'CREATE INDEX IF NOT EXISTS idx_stock_transaction_product ON stock_transaction(product_id)',
+    'CREATE INDEX IF NOT EXISTS idx_stock_transaction_created ON stock_transaction(created_at)'
   ];
 
   const hasSellPriceHistoryTable = db

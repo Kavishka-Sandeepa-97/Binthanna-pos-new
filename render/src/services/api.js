@@ -409,25 +409,25 @@ export const stockAPI = {
   // Units
   units: {
     getAll: async () => {
-      return makeRequest('/stock/units');
+      return makeRequest('/stock-unit');
     },
     getById: async (id) => {
-      return makeRequest(`/stock/units/${id}`);
+      return makeRequest(`/stock-unit/${id}`);
     },
     create: async (data) => {
-      return makeRequest('/stock/units', {
+      return makeRequest('/stock-unit', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
     update: async (id, data) => {
-      return makeRequest(`/stock/units/${id}`, {
+      return makeRequest(`/stock-unit/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       });
     },
     delete: async (id) => {
-      return makeRequest(`/stock/units/${id}`, {
+      return makeRequest(`/stock-unit/${id}`, {
         method: 'DELETE',
       });
     },
@@ -436,25 +436,25 @@ export const stockAPI = {
   // Stock Categories
   categories: {
     getAll: async () => {
-      return makeRequest('/stock/categories');
+      return makeRequest('/stock-category');
     },
     getById: async (id) => {
-      return makeRequest(`/stock/categories/${id}`);
+      return makeRequest(`/stock-category/${id}`);
     },
     create: async (data) => {
-      return makeRequest('/stock/categories', {
+      return makeRequest('/stock-category', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
     update: async (id, data) => {
-      return makeRequest(`/stock/categories/${id}`, {
+      return makeRequest(`/stock-category/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       });
     },
     delete: async (id) => {
-      return makeRequest(`/stock/categories/${id}`, {
+      return makeRequest(`/stock-category/${id}`, {
         method: 'DELETE',
       });
     },
@@ -463,25 +463,25 @@ export const stockAPI = {
   // Suppliers
   suppliers: {
     getAll: async () => {
-      return makeRequest('/stock/suppliers');
+      return makeRequest('/stock-supplier');
     },
     getById: async (id) => {
-      return makeRequest(`/stock/suppliers/${id}`);
+      return makeRequest(`/stock-supplier/${id}`);
     },
     create: async (data) => {
-      return makeRequest('/stock/suppliers', {
+      return makeRequest('/stock-supplier', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
     update: async (id, data) => {
-      return makeRequest(`/stock/suppliers/${id}`, {
+      return makeRequest(`/stock-supplier/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       });
     },
     delete: async (id) => {
-      return makeRequest(`/stock/suppliers/${id}`, {
+      return makeRequest(`/stock-supplier/${id}`, {
         method: 'DELETE',
       });
     },
@@ -490,25 +490,25 @@ export const stockAPI = {
   // Products
   products: {
     getAll: async () => {
-      return makeRequest('/stock/products');
+      return makeRequest('/stock-product');
     },
     getById: async (id) => {
-      return makeRequest(`/stock/products/${id}`);
+      return makeRequest(`/stock-product/${id}`);
     },
     create: async (data) => {
-      return makeRequest('/stock/products', {
+      return makeRequest('/stock-product', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
     update: async (id, data) => {
-      return makeRequest(`/stock/products/${id}`, {
+      return makeRequest(`/stock-product/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       });
     },
     delete: async (id) => {
-      return makeRequest(`/stock/products/${id}`, {
+      return makeRequest(`/stock-product/${id}`, {
         method: 'DELETE',
       });
     },
@@ -518,25 +518,25 @@ export const stockAPI = {
   transactions: {
     getAll: async (params = {}) => {
       const queryString = new URLSearchParams(params).toString();
-      return makeRequest(`/stock/transactions${queryString ? `?${queryString}` : ''}`);
+      return makeRequest(`/stock-transaction${queryString ? `?${queryString}` : ''}`);
     },
     getById: async (id) => {
-      return makeRequest(`/stock/transactions/${id}`);
+      return makeRequest(`/stock-transaction/${id}`);
     },
     create: async (data) => {
-      return makeRequest('/stock/transactions', {
+      return makeRequest('/stock-transaction', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
     update: async (id, data) => {
-      return makeRequest(`/stock/transactions/${id}`, {
+      return makeRequest(`/stock-transaction/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       });
     },
     delete: async (id) => {
-      return makeRequest(`/stock/transactions/${id}`, {
+      return makeRequest(`/stock-transaction/${id}`, {
         method: 'DELETE',
       });
     },

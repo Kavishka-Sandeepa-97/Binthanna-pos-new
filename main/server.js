@@ -17,6 +17,13 @@ const inOutRoutes = require('./routes/inOut');
 const cashierShiftRoutes = require('./routes/cashierShift');
 const reportsRoutes = require('./routes/reports');
 
+// Stock management routes
+const stockUnitRoutes = require('./routes/stockUnit');
+const stockCategoryRoutes = require('./routes/stockCategory');
+const stockSupplierRoutes = require('./routes/stockSupplier');
+const stockProductRoutes = require('./routes/stockProduct');
+const stockTransactionRoutes = require('./routes/stockTransaction');
+
 // Import database initialization
 const { initializeDatabase } = require('./database/init');
 const { getDatabase, getCurrentUTCTimestamp } = require('./database/init'); // Import getDatabase
@@ -82,6 +89,13 @@ server.use('/api/cashier-shifts', cashierShiftRoutes);
 
 // Reports routes
 server.use('/api/reports', reportsRoutes);
+
+// Stock management routes
+server.use('/api/stock-unit', stockUnitRoutes);
+server.use('/api/stock-category', stockCategoryRoutes);
+server.use('/api/stock-supplier', stockSupplierRoutes);
+server.use('/api/stock-product', stockProductRoutes);
+server.use('/api/stock-transaction', stockTransactionRoutes);
 
 // New route for creating item with variant and image
 server.post('/api/item-variants/create-full', upload.single('image'), (req, res) => {

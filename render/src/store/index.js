@@ -4,6 +4,7 @@ import orderSlice from './slices/orderSlice';
 import inventorySlice from './slices/inventorySlice';
 import uiSlice from './slices/uiSlice';
 import cashierShiftSlice from './slices/cashierShiftSlice';
+import stockSlice from './slices/stockSlice';
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     inventory: inventorySlice,
     ui: uiSlice,
     cashierShift: cashierShiftSlice,
+    stock: stockSlice,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -61,6 +61,8 @@ const MainLayout = ({ children }) => {
     { text: 'Inventory', icon: <Inventory />, path: '/inventory', view: 'inventory' },
     { text: 'In/Out', icon: <Receipt />, path: '/inout', view: 'inout' },
     { text: 'Reports', icon: <Analytics />, path: '/reports', view: 'reports' },
+    { text: 'Stock Manage', icon: <Inventory />, path: '/stock', view: 'stock', color: '#FF9800', hoverBg: 'rgba(255, 152, 0, 0.15)' },
+    { text: 'Stock Report', icon: <Analytics />, path: '/stock-report', view: 'stock-report', color: '#E91E63', hoverBg: 'rgba(233, 30, 99, 0.15)' },
     { text: 'Settings', icon: <Settings />, path: '/settings', view: 'settings' },
   ];
 
@@ -200,8 +202,8 @@ const MainLayout = ({ children }) => {
                 <Button
                   onClick={() => handleNavigation(item.path, item.view)}
                   sx={{
-                    color: isActive(item.path) ? '#4ECDC4' : 'rgba(255,255,255,0.8)',
-                    backgroundColor: isActive(item.path) ? 'rgba(76, 205, 196, 0.15)' : 'transparent',
+                    color: isActive(item.path) ? (item.color || '#4ECDC4') : (item.color || 'rgba(255,255,255,0.8)'),
+                    backgroundColor: isActive(item.path) ? (item.hoverBg || 'rgba(76, 205, 196, 0.15)') : 'transparent',
                     borderRadius: 2,
                     px: { xs: 1, sm: 2 },
                     py: 1,
@@ -214,10 +216,10 @@ const MainLayout = ({ children }) => {
                     fontWeight: isActive(item.path) ? 600 : 400,
                     fontSize: { xs: '0.65rem', sm: '0.75rem', md: '0.875rem' },
                     transition: 'all 0.2s ease',
-                    borderBottom: isActive(item.path) ? '2px solid #4ECDC4' : '2px solid transparent',
+                    borderBottom: isActive(item.path) ? `2px solid ${item.color || '#4ECDC4'}` : '2px solid transparent',
                     '&:hover': {
-                      backgroundColor: 'rgba(76, 205, 196, 0.1)',
-                      color: '#4ECDC4',
+                      backgroundColor: item.hoverBg || 'rgba(76, 205, 196, 0.1)',
+                      color: item.color || '#4ECDC4',
                     },
                   }}
                 >

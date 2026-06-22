@@ -16,6 +16,8 @@ import POSInterface from './components/pos/POSInterface';
 import ActiveOrders from './components/orders/ActiveOrders';
 import Inventory from './components/inventory/Inventory';
 import Reports from './components/reports/Reports';
+import StockReports from './components/reports/StockReports';
+import StockManagement from './components/stock/StockManagement';
 import Settings from './components/settings/Settings';
 import InOutManagement from './components/pos/InOutManagement';
 
@@ -173,6 +175,28 @@ const AppContent = () => {
             <ProtectedRoute>
               <MainLayout>
                 <Reports />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/stock"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <StockManagement />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/stock-report"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <StockReports />
               </MainLayout>
             </ProtectedRoute>
           }

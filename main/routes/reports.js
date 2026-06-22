@@ -247,7 +247,7 @@ router.get('/stock/transactions', (req, res) => {
       FROM stock_transaction st
       JOIN stock_product sp ON st.product_id = sp.id
       JOIN stock_category sc ON sp.category_id = sc.id
-      JOIN unit u ON sp.unit_id = u.id
+      JOIN stock_unit u ON sp.unit_id = u.id
       LEFT JOIN stock_supplier ss ON st.supplier_id = ss.id
       JOIN users s ON st.user_id = s.id
       WHERE DATE(st.created_at) >= ?
@@ -287,7 +287,7 @@ router.get('/stock/levels', (req, res) => {
         u.name as unit_name
       FROM stock_product sp
       JOIN stock_category sc ON sp.category_id = sc.id
-      JOIN unit u ON sp.unit_id = u.id
+      JOIN stock_unit u ON sp.unit_id = u.id
       ORDER BY sp.name
     `).all();
     
@@ -310,7 +310,7 @@ router.get('/stock/low-stock', (req, res) => {
         u.name as unit_name
       FROM stock_product sp
       JOIN stock_category sc ON sp.category_id = sc.id
-      JOIN unit u ON sp.unit_id = u.id
+      JOIN stock_unit u ON sp.unit_id = u.id
       WHERE sp.current_qty <= ?
       ORDER BY sp.current_qty ASC
     `).all(parseFloat(threshold));
