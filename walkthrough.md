@@ -1,34 +1,95 @@
-# Walkthrough: Database Cloud Sync System
+# Developer Documentation: POS SQLite to Supabase Sync Architecture
 
-We have successfully implemented a database synchronization system that replicates your local SQLite database to a cloud Supabase database. This enables dashboard analytics on mobile phones or other devices while maintaining a fast, offline-capable local POS system.
-
----
-
-## What We Built
-
-1. **Delete Log and Triggers:** Created `deleted_records` table and `AFTER DELETE` triggers in SQLite to track all record deletions locally without altering any existing application route logic.
-2. **Settings Database Table:** Added a `sync_settings` table to securely store sync configuration (URL, Secret Key, enabled state, status, last sync timestamp, and error logs).
-3. **Background Sync Service:** Built a Node.js sync service (`main/services/syncService.js`) running in the Electron main process. It pings Supabase and batch-uploads newly created/updated data (where `is_synced = 0`) and propagates tracked deletions.
-4. **API Endpoints:** Created Express routes (`/api/sync/settings`, `/api/sync/trigger`) to handle settings updates and manual sync requests.
-5. **Settings UI Dashboard:** Added a new **Cloud Sync** tab to the Settings page in the React POS UI, providing toggle controls, credential fields, real-time sync status chips, error logs, and a "Sync Now" button.
+This document describes the synchronization system implemented in the Binthanna Restaurant POS application. It acts as a comprehensive reference guide for other developers or AI assistants to understand the design patterns, code structure, and databases involved.
 
 ---
 
-## Step 1: Create Supabase Tables
+## 1. Architecture Overview (Offline-First Design)
 
-Follow these steps to set up the tables on your Supabase database:
+The system is designed as an **offline-first application**:
+* **Primary Database (Local):** **SQLite** (`better-sqlite3`) runs locally on the POS machine. All transactional and master data operations are executed directly against this database. The application does not require internet connectivity to perform billing, stock operations, or cashier management.
+* **Secondary Database (Cloud):** **Supabase (PostgreSQL)** serves as a cloud-based, read-only mirror of the local database. A mobile app or web dashboard queries this cloud database to display business analytics.
+* **Data Flow Direction:** One-way synchronization from **Local SQLite ➡️ Supabase Cloud**. No writes or edits are fetched from Supabase back to the local database, eliminating standard multi-master conflict resolution issues.
 
-1. Log in to your [Supabase Dashboard](https://supabase.com/dashboard).
-2. Create a new project (e.g. named `Binthanna POS`).
-3. Click on your project and select **SQL Editor** from the left-hand navigation menu.
-4. Click **New Query** -> **Blank Query**.
-5. Copy and paste the following SQL script into the editor, then click **Run**:
+---
+
+## 2. Sync Mechanism & Design Patterns
+
+### A. Delta Syncing (`is_synced` Flag)
+Every sync-enabled table in SQLite contains an `is_synced` column (`BOOLEAN DEFAULT 0`).
+* **Inserts:** When a row is inserted, `is_synced` is set to `0`.
+* **Updates:** When a row is modified via backend routes, `is_synced` is reset to `0`.
+* **Upload:** The background service queries rows where `is_synced = 0`, upserts them to Supabase, and updates their local `is_synced` status to `1`.
+
+### B. Delete Tracking (SQLite Triggers / Log Queue)
+Because standard SQL `DELETE` queries remove rows entirely, we cannot track what was deleted by simply inspecting remaining rows. Instead of modifying all application controllers to use "soft deletes", we utilize database-level triggers:
+* **Log Table:** A `deleted_records` table logs the table name and the primary key (`record_id`) of deleted rows.
+* **Triggers:** A trigger (`AFTER DELETE`) is dynamically attached to all sync-enabled tables in SQLite.
+* **Syncing Deletes:** The background sync service reads unsynced deletes, calls the Supabase API to delete matching IDs, and marks the logs as synced.
+
+### C. Dependency-Ordered Synchronization
+To prevent Foreign Key constraint failures in PostgreSQL, the tables are synchronized in a strict sequential order based on their relationships:
+1. `users` (independent)
+2. `cashier_shift` (depends on `users`)
+3. `brand` (independent)
+4. `category` (hierarchical self-references)
+5. `item` (depends on `category`, `brand`)
+6. `variant` (independent)
+7. `item_variant` (depends on `variant`, `item`)
+8. `global_discount_settings` (independent)
+9. `orders` (depends on `users`)
+10. `supplier` (independent)
+11. `stock_batch` (depends on `item_variant`, `supplier`)
+12. `item_variant_order` (depends on `item_variant`, `orders`, `stock_batch`)
+13. `returns` (depends on `users`, `item_variant_order`, `orders`)
+14. `sell_price_history` (depends on `item_variant`, `users`, `stock_batch`)
+15. `in_out` (depends on `users`)
+16. `stock_unit` (independent)
+17. `stock_category` (independent)
+18. `stock_supplier` (independent)
+19. `stock_product` (depends on `stock_category`, `stock_unit`)
+20. `stock_transaction` (depends on `stock_product`, `stock_supplier`, `users`)
+
+---
+
+## 3. Directory Map & File Changes
+
+The synchronization codebase spans the following files:
+
+### Backend (Electron / Express / Node.js)
+1. **[main/database/init.js](file:///d:/Binthanna/new/main/database/init.js)**
+   * Defines database schemas for `sync_settings` and `deleted_records`.
+   * Inserts default sync config `(id = 1, is_enabled = 0)` on initialization.
+   * `createSyncTriggers()`: Loops through tables and dynamically creates `AFTER DELETE` triggers.
+   * `addSyncColumnsIfMissing()`: Safe database migration function. On app start, it inspects existing local SQLite tables and appends the `is_synced` column if missing, preventing errors on existing installations.
+2. **[main/services/syncService.js](file:///d:/Binthanna/new/main/services/syncService.js)**
+   * Core synchronization logic.
+   * **Node WebSocket Polyfill:** Injects a mock `WebSocket` class onto `global` to bypass Supabase JS Client initialization checks (which throw in Node 18 since WebSockets aren't natively present and are only needed for real-time channels which this POS doesn't use).
+   * `runSync()`: Connects to Supabase, checks internet connectivity, processes deletions, batch-upserts data, maps SQLite data types (converting integer flags to Javascript booleans), and logs execution statuses (e.g. `'syncing'`, `'success'`, `'error'`).
+   * `startSyncScheduler()` / `stopSyncScheduler()`: Background interval timer checking sync status every 60 seconds (executing sync every 15 minutes or when manually triggered).
+3. **[main/routes/sync.js](file:///d:/Binthanna/new/main/routes/sync.js)**
+   * Express endpoints to retrieve (`GET /api/sync/settings`), save (`PUT /api/sync/settings`), and manually run (`POST /api/sync/trigger`) sync routines.
+4. **[main/server.js](file:///d:/Binthanna/new/main/server.js)**
+   * Registers `/api/sync` route middleware.
+5. **[main/main.js](file:///d:/Binthanna/new/main/main.js)**
+   * Starts sync scheduler background loops on window creation (`createWindow()`).
+   * Gracefully triggers a final database sync and clears intervals when the application is closing (`app.on('before-quit')`).
+
+### Frontend (React / MUI)
+1. **[render/src/services/api.js](file:///d:/Binthanna/new/render/src/services/api.js)**
+   * Adds `api.sync` helper methods wrapper (`getSettings`, `updateSettings`, `triggerSync`).
+2. **[render/src/components/settings/Settings.jsx](file:///d:/Binthanna/new/render/src/components/settings/Settings.jsx)**
+   * Implements a custom **Cloud Sync** tab panel in the POS Settings UI.
+   * Toggle switches to turn sync on/off, input fields for Supabase credentials (masked API Keys), status indicators (loading spinners, success logs, or warning error banners), and a **Sync Now** trigger button.
+   * Implements optimized polling: checks sync statuses every 5 seconds when the sync tab is active, while preserving the user's active keyboard inputs/typing and avoiding draft reset overlaps.
+
+---
+
+## 4. How to Set Up Supabase (Database Schema Setup)
+
+Copy and execute the following PostgreSQL script in the **Supabase SQL Editor** to generate the sync schemas:
 
 ```sql
--- Disable Row Level Security (RLS) or set permissive policies for testing. 
--- Since we are connecting using the service_role key from POS, RLS is automatically bypassed for sync uploads.
--- If you want your React mobile dashboard to read the tables, enable RLS and add a SELECT policy for Authenticated or Anon users.
-
 -- 1. Users
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT PRIMARY KEY,
@@ -262,34 +323,10 @@ CREATE TABLE IF NOT EXISTS stock_transaction (
 
 ---
 
-## Step 2: Retrieve API Keys and Configure Sync
+## 5. Troubleshooting & Maintenance Queries
 
-1. Go to your **Supabase Dashboard** -> **Project Settings** (Gear icon in left panel).
-2. Go to **API**.
-3. Under **Project API keys**, copy:
-   - **Project URL**
-   - **service_role key** (Click *Reveal* to show it). *Warning: Do not share the service role key publicly! It is safe inside the Electron POS database, but do not post it online.*
-4. Start your local POS application.
-5. Navigate to **Settings** in the POS sidebar.
-6. Click the new **Cloud Sync** tab.
-7. Switch the toggle on to **Enable Sync**.
-8. Paste the **Project URL** and the **service_role API Key** in their respective fields.
-9. Click **Save Settings**.
-
----
-
-## Step 3: Test Synchronization
-
-1. In the **Cloud Sync** tab, click **Sync Now**.
-2. The status chip should show **Syncing...** and then change to **Synced Successfully** once it completes (usually 1-3 seconds).
-3. If there is a connection issue, it will display **Sync Error** with a detailed error log directly in the panel.
-4. Once successful, visit your Supabase dashboard **Table Editor** to view your synchronized SQLite tables and POS transactions!
-
----
-
-## Resetting Cloud Data (Supabase Truncate)
-
-If you ever need to clear all data from Supabase to perform a clean resync from scratch, copy and run this SQL script in your **Supabase SQL Editor**:
+### A. Resetting Cloud Data (Supabase Truncate)
+To delete all data on Supabase tables to perform a completely fresh synchronization from scratch, run this in your **Supabase SQL Editor**:
 
 ```sql
 TRUNCATE TABLE 
@@ -314,4 +351,34 @@ TRUNCATE TABLE
   stock_product, 
   stock_transaction 
 CASCADE;
+```
+
+### B. Force SQLite to Resync All Local Data
+If cloud data is truncated, local tables still have `is_synced = 1`. To force SQLite to mark all records as unsynced so that the scheduler uploads all existing local data again, execute this query in your **SQLite Database Editor** on the POS machine:
+
+```sql
+-- Reset sync flags
+UPDATE users SET is_synced = 0;
+UPDATE cashier_shift SET is_synced = 0;
+UPDATE brand SET is_synced = 0;
+UPDATE category SET is_synced = 0;
+UPDATE item SET is_synced = 0;
+UPDATE variant SET is_synced = 0;
+UPDATE item_variant SET is_synced = 0;
+UPDATE global_discount_settings SET is_synced = 0;
+UPDATE orders SET is_synced = 0;
+UPDATE item_variant_order SET is_synced = 0;
+UPDATE returns SET is_synced = 0;
+UPDATE sell_price_history SET is_synced = 0;
+UPDATE in_out SET is_synced = 0;
+UPDATE supplier SET is_synced = 0;
+UPDATE stock_batch SET is_synced = 0;
+UPDATE stock_unit SET is_synced = 0;
+UPDATE stock_category SET is_synced = 0;
+UPDATE stock_supplier SET is_synced = 0;
+UPDATE stock_product SET is_synced = 0;
+UPDATE stock_transaction SET is_synced = 0;
+
+-- Clear deletions logs queue
+DELETE FROM deleted_records;
 ```
