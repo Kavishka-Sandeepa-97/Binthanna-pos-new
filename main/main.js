@@ -5,6 +5,7 @@ const { initializeDatabase, closeDatabase } = require('./database/init');
 const fs = require('fs');
 const { exec } = require('child_process');
 const os = require('os');
+const { startSyncScheduler, stopSyncScheduler, runSync } = require('./services/syncService');
 
 let mainWindow;
 let server;
@@ -287,6 +288,9 @@ function createWindow() {
   // Initialize database first
   initializeDatabase();
 
+  // Start background database sync scheduler
+  startSyncScheduler();
+
   // Start Express server
   server = expressServer.listen(3001, () => {
     console.log('Express server running on port 3001');
@@ -375,6 +379,16 @@ app.on('before-quit', async (event) => {
   try {
     // Stop temp file cleanup
     stopTempFileCleanup();
+
+    // Stop sync background scheduler
+    stopSyncScheduler();
+
+    // Perform final sync run before exit (timeout or fail gracefully)
+    try {
+      await runSync();
+    } catch (syncErr) {
+      console.error('Final sync failed on exit:', syncErr.message);
+    }
 
     // Close Express server
     if (server) {

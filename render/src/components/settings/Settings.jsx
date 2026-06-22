@@ -45,6 +45,10 @@ import {
   Save as SaveIcon,
   AccountBalanceWallet,
   Refresh,
+  CloudQueue as CloudIcon,
+  Sync as SyncIcon,
+  Visibility,
+  VisibilityOff,
 } from '@mui/icons-material';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
@@ -92,10 +96,57 @@ const Settings = () => {
     receiptFooter: 'Thank you for dining with us!',
   });
 
+  // Cloud Sync state
+  const [syncConfig, setSyncConfig] = useState({
+    is_enabled: false,
+    supabase_url: '',
+    supabase_key: '',
+    last_sync_at: null,
+    last_sync_status: 'idle',
+    last_sync_error: '',
+  });
+  const [showSyncKey, setShowSyncKey] = useState(false);
+  const [syncInProgress, setSyncInProgress] = useState(false);
+
   useEffect(() => {
     fetchUsers();
     fetchCashierShifts();
+    fetchSyncSettings(true);
   }, []);
+
+  const fetchSyncSettings = async (isInitial = false) => {
+    try {
+      const data = await api.sync.getSettings();
+      if (isInitial) {
+        setSyncConfig({
+          ...data,
+          is_enabled: data.is_enabled === 1 || data.is_enabled === true,
+        });
+      } else {
+        setSyncConfig(prev => ({
+          ...prev,
+          last_sync_at: data.last_sync_at,
+          last_sync_status: data.last_sync_status,
+          last_sync_error: data.last_sync_error,
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to load sync settings:', error);
+    }
+  };
+
+  useEffect(() => {
+    let interval = null;
+    if (currentTab === 5) {
+      fetchSyncSettings(false);
+      interval = setInterval(() => {
+        fetchSyncSettings(false);
+      }, 5000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [currentTab]);
 
   useEffect(() => {
     // If URL contains ?tab=profile (or other), open that tab
@@ -626,6 +677,186 @@ const Settings = () => {
     </Card>
   );
 
+  const handleSaveSyncSettings = async () => {
+    try {
+      setLoading(true);
+      await api.sync.updateSettings({
+        is_enabled: syncConfig.is_enabled,
+        supabase_url: syncConfig.supabase_url,
+        supabase_key: syncConfig.supabase_key,
+      });
+      toast.success('Sync settings updated successfully');
+      fetchSyncSettings();
+    } catch (error) {
+      toast.error(error.message || 'Failed to save sync settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTriggerSync = async () => {
+    try {
+      setSyncInProgress(true);
+      await api.sync.triggerSync();
+      toast.info('Sync triggered in background');
+      setSyncConfig(prev => ({ ...prev, last_sync_status: 'pending' }));
+      setTimeout(() => fetchSyncSettings(), 2000);
+    } catch (error) {
+      toast.error(error.message || 'Failed to trigger sync');
+    } finally {
+      setSyncInProgress(false);
+    }
+  };
+
+  const CloudSyncSettings = () => (
+    <Card>
+      <CardContent>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Typography variant="h6" fontWeight="bold">
+            Cloud Database Synchronization (Supabase)
+          </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={syncConfig.is_enabled}
+                onChange={(e) => setSyncConfig({ ...syncConfig, is_enabled: e.target.checked })}
+                disabled={loading}
+              />
+            }
+            label="Enable Sync"
+          />
+        </Box>
+
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Sync operates in the background every 15 minutes. It pushes local SQLite updates and deletes to your cloud Supabase database for mobile app dashboard viewing.
+        </Alert>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Supabase Project URL"
+              value={syncConfig.supabase_url || ''}
+              onChange={(e) => setSyncConfig({ ...syncConfig, supabase_url: e.target.value })}
+              disabled={loading || !syncConfig.is_enabled}
+              placeholder="https://your-project.supabase.co"
+              helperText="Find this in Supabase Project Settings -> API"
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Supabase service_role API Key"
+              type={showSyncKey ? 'text' : 'password'}
+              value={syncConfig.supabase_key || ''}
+              onChange={(e) => setSyncConfig({ ...syncConfig, supabase_key: e.target.value })}
+              disabled={loading || !syncConfig.is_enabled}
+              placeholder="eyJhbGciOi..."
+              helperText="IMPORTANT: Use the secret 'service_role' key, NOT the public anon key. This allows the POS to write and delete data bypassing RLS."
+              InputProps={{
+                endAdornment: (
+                  <IconButton
+                    onClick={() => setShowSyncKey(!showSyncKey)}
+                    disabled={!syncConfig.is_enabled}
+                  >
+                    {showSyncKey ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                )
+              }}
+            />
+          </Grid>
+
+          <Grid item xs={12}>
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={handleSaveSyncSettings}
+              disabled={loading}
+              sx={{ mr: 2 }}
+            >
+              Save Settings
+            </Button>
+            
+            <Button
+              variant="outlined"
+              startIcon={syncConfig.last_sync_status === 'syncing' || syncConfig.last_sync_status === 'pending' || syncInProgress ? <CircularProgress size={16} /> : <SyncIcon />}
+              onClick={handleTriggerSync}
+              disabled={loading || !syncConfig.is_enabled || !syncConfig.supabase_url || !syncConfig.supabase_key || syncConfig.last_sync_status === 'syncing' || syncConfig.last_sync_status === 'pending' || syncInProgress}
+            >
+              Sync Now
+            </Button>
+          </Grid>
+        </Grid>
+
+        <Divider sx={{ my: 4 }} />
+
+        <Typography variant="h6" fontWeight="semibold" mb={2}>
+          Sync Status Information
+        </Typography>
+
+        <Box display="flex" flexDirection="column" gap={2}>
+          <Box display="flex" alignItems="center" gap={2}>
+            <Typography variant="body1" color="text.secondary">
+              Current Status:
+            </Typography>
+            {syncConfig.is_enabled ? (
+              <Chip
+                label={
+                  syncConfig.last_sync_status === 'syncing' || syncConfig.last_sync_status === 'pending'
+                    ? 'Syncing...'
+                    : syncConfig.last_sync_status === 'success'
+                    ? 'Synced Successfully'
+                    : syncConfig.last_sync_status === 'error'
+                    ? 'Sync Error'
+                    : 'Idle'
+                }
+                color={
+                  syncConfig.last_sync_status === 'syncing' || syncConfig.last_sync_status === 'pending'
+                    ? 'info'
+                    : syncConfig.last_sync_status === 'success'
+                    ? 'success'
+                    : syncConfig.last_sync_status === 'error'
+                    ? 'error'
+                    : 'default'
+                }
+                icon={
+                  syncConfig.last_sync_status === 'syncing' || syncConfig.last_sync_status === 'pending' ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : syncConfig.last_sync_status === 'success' ? (
+                    <CloudIcon />
+                  ) : (
+                    <SyncIcon />
+                  )
+                }
+              />
+            ) : (
+              <Chip label="Disabled" color="default" />
+            )}
+          </Box>
+
+          <Box>
+            <Typography variant="body2" color="text.secondary">
+              Last Sync Attempt: {syncConfig.last_sync_at ? new Date(syncConfig.last_sync_at).toLocaleString() : 'Never'}
+            </Typography>
+          </Box>
+
+          {syncConfig.last_sync_status === 'error' && syncConfig.last_sync_error && (
+            <Box mt={1}>
+              <Alert severity="error">
+                <Typography variant="subtitle2" fontWeight="bold">
+                  Latest Error Log:
+                </Typography>
+                <Typography variant="body2" style={{ whiteSpace: 'pre-wrap' }}>
+                  {syncConfig.last_sync_error}
+                </Typography>
+              </Alert>
+            </Box>
+          )}
+        </Box>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <Box p={3}>
       <Typography variant="h4" fontWeight="bold" mb={3}>
@@ -638,6 +869,7 @@ const Settings = () => {
         <Tab icon={<AccountBalanceWallet />} label="Cashier Shifts" />
         <Tab icon={<StoreIcon />} label="Store" />
         <Tab icon={<PrintIcon />} label="Printer" />
+        <Tab icon={<CloudIcon />} label="Cloud Sync" />
       </Tabs>
 
       {currentTab === 0 && <ProfileSettings />}
@@ -645,6 +877,7 @@ const Settings = () => {
       {currentTab === 2 && <CashierShifts />}
       {currentTab === 3 && <StoreSettings />}
       {currentTab === 4 && <PrinterSettings />}
+      {currentTab === 5 && <CloudSyncSettings />}
 
       {/* Add/Edit User Dialog */}
       <Dialog 

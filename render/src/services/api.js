@@ -828,6 +828,24 @@ export const globalDiscountAPI = {
   },
 };
 
+// Sync API
+export const syncAPI = {
+  getSettings: async () => {
+    return makeRequest('/sync/settings');
+  },
+  updateSettings: async (settings) => {
+    return makeRequest('/sync/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  },
+  triggerSync: async () => {
+    return makeRequest('/sync/trigger', {
+      method: 'POST',
+    });
+  },
+};
+
 export default {
   auth: authAPI,
   staff: staffAPI,
@@ -846,4 +864,5 @@ export default {
   offline: offlineUtils,
   enhanced: enhancedAPI,
   globalDiscount: globalDiscountAPI,
+  sync: syncAPI,
 };

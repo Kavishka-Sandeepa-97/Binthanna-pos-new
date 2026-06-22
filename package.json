@@ -13,10 +13,12 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.2",
     "axios": "^1.11.0",
     "better-sqlite3": "^11.7.0",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "express": "^4.18.2",
     "multer": "^2.0.2"
   },

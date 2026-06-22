@@ -28,7 +28,9 @@ const initializeDatabase = () => {
     
     isInitialized = true;
     createTables();
+    addSyncColumnsIfMissing();
     createIndexes();
+    createSyncTriggers();
     
     console.log('Database initialized successfully at:', dbPath);
   } catch (err) {
@@ -383,6 +385,30 @@ const createTables = () => {
     )
   `);
 
+  // sync_settings table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sync_settings (
+      id INTEGER PRIMARY KEY,
+      is_enabled BOOLEAN DEFAULT 0,
+      supabase_url TEXT DEFAULT '',
+      supabase_key TEXT DEFAULT '',
+      last_sync_at DATETIME,
+      last_sync_status TEXT DEFAULT 'idle',
+      last_sync_error TEXT
+    )
+  `);
+
+  // deleted_records table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS deleted_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      record_id INTEGER NOT NULL,
+      deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      is_synced BOOLEAN DEFAULT 0
+    )
+  `);
+
   // Insert default admin user
   insertDefaultData();
 };
@@ -502,6 +528,89 @@ const insertDefaultData = () => {
     ];
     barSub.forEach(sub => insertCategoryStmt.run(sub, barId));
   }
+
+  // Insert default sync settings
+  const syncSettings = db.prepare('SELECT id FROM sync_settings WHERE id = 1').get();
+  if (!syncSettings) {
+    db.prepare('INSERT INTO sync_settings (id, is_enabled, supabase_url, supabase_key, last_sync_status) VALUES (1, 0, ?, ?, ?)')
+      .run('', '', 'idle');
+  }
+};
+
+// Create sync delete triggers for all tables
+const createSyncTriggers = () => {
+  const tables = [
+    'users',
+    'cashier_shift',
+    'brand',
+    'category',
+    'item',
+    'variant',
+    'item_variant',
+    'orders',
+    'item_variant_order',
+    'returns',
+    'sell_price_history',
+    'in_out',
+    'supplier',
+    'stock_batch',
+    'stock_unit',
+    'stock_category',
+    'stock_supplier',
+    'stock_product',
+    'stock_transaction'
+  ];
+
+  tables.forEach(table => {
+    db.exec(`DROP TRIGGER IF EXISTS trg_${table}_sync_delete`);
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_${table}_sync_delete
+      AFTER DELETE ON ${table}
+      BEGIN
+        INSERT INTO deleted_records (table_name, record_id, is_synced)
+        VALUES ('${table}', OLD.id, 0);
+      END;
+    `);
+  });
+};
+
+// Automatically add missing is_synced column to old tables
+const addSyncColumnsIfMissing = () => {
+  const tables = [
+    'users',
+    'cashier_shift',
+    'brand',
+    'category',
+    'item',
+    'variant',
+    'item_variant',
+    'global_discount_settings',
+    'orders',
+    'item_variant_order',
+    'returns',
+    'sell_price_history',
+    'in_out',
+    'supplier',
+    'stock_batch',
+    'stock_unit',
+    'stock_category',
+    'stock_supplier',
+    'stock_product',
+    'stock_transaction'
+  ];
+
+  tables.forEach(table => {
+    try {
+      const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+      const hasSyncedCol = columns.some(col => col.name === 'is_synced');
+      if (!hasSyncedCol) {
+        console.log(`Adding missing 'is_synced' column to table: ${table}`);
+        db.exec(`ALTER TABLE ${table} ADD COLUMN is_synced BOOLEAN DEFAULT 0`);
+      }
+    } catch (err) {
+      console.error('Error checking/adding sync column for table ' + table + ':', err.message);
+    }
+  });
 };
 
 // Close database connection properly

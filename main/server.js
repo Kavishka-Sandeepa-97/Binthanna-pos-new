@@ -17,6 +17,8 @@ const inOutRoutes = require('./routes/inOut');
 const cashierShiftRoutes = require('./routes/cashierShift');
 const reportsRoutes = require('./routes/reports');
 
+const syncRoutes = require('./routes/sync');
+
 // Stock management routes
 const stockUnitRoutes = require('./routes/stockUnit');
 const stockCategoryRoutes = require('./routes/stockCategory');
@@ -89,6 +91,9 @@ server.use('/api/cashier-shifts', cashierShiftRoutes);
 
 // Reports routes
 server.use('/api/reports', reportsRoutes);
+
+// Sync settings and controls
+server.use('/api/sync', syncRoutes);
 
 // Stock management routes
 server.use('/api/stock-unit', stockUnitRoutes);
