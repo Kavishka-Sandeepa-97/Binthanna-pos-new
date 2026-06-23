@@ -182,16 +182,24 @@ const ActiveOrdersDialog = ({ open, onClose }) => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                           {order.customer_name && (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               <Person fontSize="small" color="action" />
-                              <Typography variant="body2">
+                              <Typography variant="body2" fontWeight="medium">
                                 {order.customer_name}
                               </Typography>
                             </Box>
                           )}
-                          {!order.customer_name && (
+                          {order.table_number && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <Restaurant fontSize="small" color="secondary" />
+                              <Typography variant="body2" color="secondary.main" fontWeight="bold">
+                                {order.table_number}
+                              </Typography>
+                            </Box>
+                          )}
+                          {!order.customer_name && !order.table_number && (
                             <Typography variant="body2" color="text.secondary">
                               N/A
                             </Typography>
@@ -201,7 +209,7 @@ const ActiveOrdersDialog = ({ open, onClose }) => {
                             size="small"
                             color={order.is_card_payment ? 'info' : 'success'}
                             variant="outlined"
-                            sx={{ mt: 0.6, height: 20, fontSize: '0.68rem' }}
+                            sx={{ mt: 0.2, alignSelf: 'flex-start', height: 20, fontSize: '0.68rem' }}
                           />
                         </Box>
                       </TableCell>

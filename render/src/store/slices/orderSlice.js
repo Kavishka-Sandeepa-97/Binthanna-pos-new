@@ -25,6 +25,7 @@ const createEmptyOrder = () => ({
   additionalCharges: 0,
   total: 0,
   customerName: '',
+  tableNumber: '',
   orderType: 'dine-in',
   isEditing: false,
   originalStatus: null,
@@ -183,6 +184,7 @@ const orderSlice = createSlice({
         additionalCharges: toNumber(order.additional_charges, 0),
         total: toNumber(order.total_amount, 0),
         customerName: order.customer_name || '',
+        tableNumber: order.table_number || '',
         orderType: order.order_type || 'dine-in',
         isEditing: true,
         originalStatus: order.status,
@@ -250,6 +252,7 @@ const orderSlice = createSlice({
         additionalCharges: toNumber(order.additional_charges, 0),
         total: toNumber(order.total_amount, 0),
         customerName: order.customer_name || '',
+        tableNumber: order.table_number || '',
         orderType: 'dine-in',
         isEditing: false,
         originalStatus: order.status,
@@ -404,7 +407,11 @@ const orderSlice = createSlice({
       state.currentOrder.items = state.currentOrder.items.filter(
         (item) => item.lineKey !== lineKey
       );
-      recalculateCurrentOrder(state.currentOrder);
+      if (state.currentOrder.items.length === 0) {
+        state.currentOrder = createEmptyOrder();
+      } else {
+        recalculateCurrentOrder(state.currentOrder);
+      }
     },
 
     updateItemQuantity: (state, action) => {
@@ -490,8 +497,11 @@ const orderSlice = createSlice({
     },
 
     setCustomerInfo: (state, action) => {
-      const { customerName, orderType } = action.payload;
+      const { customerName, tableNumber, orderType } = action.payload;
       state.currentOrder.customerName = customerName || '';
+      if (tableNumber !== undefined) {
+        state.currentOrder.tableNumber = tableNumber || '';
+      }
       state.currentOrder.orderType = orderType || 'dine-in';
     },
 

@@ -35,6 +35,7 @@ import {
   Refresh,
   LocalOffer,
   Edit as EditIcon,
+  Restaurant,
 } from '@mui/icons-material';
 import {
   updateItemQuantity,
@@ -422,6 +423,7 @@ const OrderSummary = ({ view = 'full' }) => {
           items: mapOrderItems(currentOrder.items),
           additional_charges: currentOrder.additionalCharges,
           customer_name: currentOrder.customerName,
+          table_number: currentOrder.tableNumber || null,
           tender_cash: tenderCash,
           is_card_payment: effectivePaymentMethod === 'card',
           discount_type: effectiveOrderDiscount.discountType,
@@ -454,6 +456,7 @@ const OrderSummary = ({ view = 'full' }) => {
               items: mapOrderItems(currentOrder.items),
               additional_charges: currentOrder.additionalCharges,
               customer_name: currentOrder.customerName,
+              table_number: currentOrder.tableNumber || null,
               tender_cash: tenderCash,
               is_card_payment: effectivePaymentMethod === 'card',
               discount_type: effectiveOrderDiscount.discountType,
@@ -511,7 +514,7 @@ const OrderSummary = ({ view = 'full' }) => {
     }
   };
 
-  const handleSetAsActive = async ({ customerName }) => {
+  const handleSetAsActive = async ({ customerName, tableNumber }) => {
     if (currentOrder.isReturnOrder) {
       toast.error('Return orders must be completed directly. Active mode is disabled.');
       return;
@@ -526,6 +529,7 @@ const OrderSummary = ({ view = 'full' }) => {
       items: mapOrderItems(currentOrder.items),
       additional_charges: currentOrder.additionalCharges,
       customer_name: customerName || null,
+      table_number: tableNumber || null,
       is_card_payment: effectivePaymentMethod === 'card',
       discount_type: effectiveOrderDiscount.discountType,
       discount_value: effectiveOrderDiscount.discountValue,
@@ -657,13 +661,14 @@ const OrderSummary = ({ view = 'full' }) => {
             </Alert>
           )}
 
-          {showItemsSection && currentOrder.id && (
-            <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+          {showItemsSection && (currentOrder.id || currentOrder.customerName || currentOrder.tableNumber) && (
+            <Box sx={{ mb: 2, px: view === 'items' ? 2 : 0, pt: view === 'items' ? 2 : 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
               <Typography variant="subtitle1" fontWeight="bold">
-                Order #{currentOrder.id}
+                {currentOrder.id ? `Order #${currentOrder.id}` : 'Current Order'}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                 {currentOrder.customerName ? <Chip icon={<Person />} label={currentOrder.customerName} size="small" /> : null}
+                {currentOrder.tableNumber ? <Chip icon={<Restaurant sx={{ fontSize: '0.9rem' }} />} label={currentOrder.tableNumber} color="secondary" size="small" /> : null}
                 {currentOrder.barcode ? <Chip label={currentOrder.barcode} size="small" variant="outlined" /> : null}
               </Box>
             </Box>
@@ -1280,6 +1285,7 @@ const OrderSummary = ({ view = 'full' }) => {
           onClose={() => setSetActiveDialogOpen(false)}
           onSave={handleSetAsActive}
           initialCustomerName={currentOrder.customerName}
+          initialTableNumber={currentOrder.tableNumber}
         />
       )}
 

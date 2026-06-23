@@ -11,34 +11,38 @@ import {
 } from '@mui/material';
 import { Restaurant, Person } from '@mui/icons-material';
 
-const SetActiveDialog = ({ open, onClose, onSave, initialCustomerName = '' }) => {
+const SetActiveDialog = ({ open, onClose, onSave, initialCustomerName = '', initialTableNumber = '' }) => {
   const [customerName, setCustomerName] = useState('');
+  const [tableNumber, setTableNumber] = useState('');
   const [error, setError] = useState('');
 
-  // When dialog opens, prefill with initial values (useful when editing a loaded active order)
+  // Prefill when dialog opens
   React.useEffect(() => {
     if (open) {
       setCustomerName(String(initialCustomerName || ''));
+      setTableNumber(String(initialTableNumber || ''));
       setError('');
     }
-  }, [open, initialCustomerName]);
+  }, [open, initialCustomerName, initialTableNumber]);
+
   const handleSave = () => {
-    // Validate: customer name must be filled
-    if (!customerName.trim()) {
-      setError('Please enter Customer Name');
+    // Validate: at least one must be filled
+    if (!customerName.trim() && !tableNumber.trim()) {
+      setError('Please enter a Customer Name or Table Number');
       return;
     }
 
     setError('');
     onSave({
       customerName: customerName.trim(),
+      tableNumber: tableNumber.trim(),
     });
-    // Leave inputs as they are (caller clears if needed)
   };
 
   const handleClose = () => {
     setError('');
     setCustomerName('');
+    setTableNumber('');
     onClose();
   };
 
@@ -64,8 +68,19 @@ const SetActiveDialog = ({ open, onClose, onSave, initialCustomerName = '' }) =>
             placeholder="e.g., John Doe"
           />
 
+          <TextField
+            label="Table Number"
+            value={tableNumber}
+            onChange={(e) => setTableNumber(e.target.value)}
+            fullWidth
+            InputProps={{
+              startAdornment: <Restaurant sx={{ mr: 1, color: 'action.active' }} />,
+            }}
+            placeholder="e.g., T-12, VIP 1"
+          />
+
           <Alert severity="info" sx={{ mt: 1 }}>
-            Customer Name is required
+            Provide at least Customer Name or Table Number to save the order as active.
           </Alert>
         </Box>
       </DialogContent>
