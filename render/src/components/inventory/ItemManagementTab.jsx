@@ -73,6 +73,7 @@ const ItemManagementTab = ({ categories, itemVariants, loading }) => {
     category_name: '',
     brand_id: '',
     gender: 'UNISEX',
+    is_qty_managed: true,
     image: null,
     imagePreview: null,
   });
@@ -148,7 +149,7 @@ const ItemManagementTab = ({ categories, itemVariants, loading }) => {
   const isInActivePath = (id) => activePath.includes(id);
 
   const resetForm = () => {
-    setItemFormData({ name: '', category_id: '', category_name: '', brand_id: '', gender: 'UNISEX', image: null, imagePreview: null });
+    setItemFormData({ name: '', category_id: '', category_name: '', brand_id: '', gender: 'UNISEX', is_qty_managed: true, image: null, imagePreview: null });
     setFormFieldTouched({ name: false, category: false });
     closeCategoryMenus();
   };
@@ -163,6 +164,7 @@ const ItemManagementTab = ({ categories, itemVariants, loading }) => {
       category_name: item.category_name || item.category || '',
       brand_id: item.brand_id || '',
       gender: item.gender || 'UNISEX',
+      is_qty_managed: item.is_qty_managed !== undefined ? !!item.is_qty_managed : true,
       image: null,
       imagePreview: null,
     });
@@ -172,8 +174,12 @@ const ItemManagementTab = ({ categories, itemVariants, loading }) => {
     try {
       const itemId = item.item_id_ref || item.id;
       const fullItem = await api.items.getById(itemId);
-      if (fullItem?.image) {
-        setItemFormData(prev => ({ ...prev, imagePreview: fullItem.image }));
+      if (fullItem) {
+        setItemFormData(prev => ({
+          ...prev,
+          imagePreview: fullItem.image || prev.imagePreview,
+          is_qty_managed: fullItem.is_qty_managed !== undefined ? !!fullItem.is_qty_managed : prev.is_qty_managed
+        }));
       }
     } catch { /* image just won't prefill — user can re-upload */ }
   };
@@ -216,6 +222,7 @@ const ItemManagementTab = ({ categories, itemVariants, loading }) => {
         category_id: itemFormData.category_id,
         brand_id: itemFormData.brand_id || null,
         gender: itemFormData.gender,
+        is_qty_managed: itemFormData.is_qty_managed ? 1 : 0,
         image: itemFormData.imagePreview,
       };
       if (editingItem) {
@@ -300,9 +307,12 @@ const ItemManagementTab = ({ categories, itemVariants, loading }) => {
                         <ListItemText
                           primary={<Typography variant="body1" fontWeight="bold">{item.item_name || item.name}</Typography>}
                           secondary={
-                            <Box display="flex" gap={1} alignItems="center">
+                            <Box display="flex" gap={1} alignItems="center" flexWrap="wrap">
                               <Chip label={item.category_name || item.category} size="small" />
                               {item.brand_name && <Chip label={item.brand_name} size="small" variant="outlined" color="primary" />}
+                              {(item.is_qty_managed === 0 || item.is_qty_managed === false) && (
+                                <Chip label="Qty Not Managed" size="small" color="warning" variant="outlined" />
+                              )}
                             </Box>
                           }
                         />
@@ -429,6 +439,18 @@ const ItemManagementTab = ({ categories, itemVariants, loading }) => {
                 {brands.map((brand) => <MenuItem key={brand.id} value={brand.id}>{brand.brand_name}</MenuItem>)}
               </Select>
             </FormControl>
+
+            {/* Quantity Management Option */}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={itemFormData.is_qty_managed}
+                  onChange={(e) => setItemFormData({ ...itemFormData, is_qty_managed: e.target.checked })}
+                  color="primary"
+                />
+              }
+              label="Manage Quantity (Track stock & batches)"
+            />
 
 
 

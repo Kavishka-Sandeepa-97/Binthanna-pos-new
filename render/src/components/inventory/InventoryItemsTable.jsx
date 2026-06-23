@@ -29,6 +29,9 @@ import {
 } from '@mui/icons-material';
 
 const getStockStatus = (item) => {
+  if (item.is_qty_managed === 0 || item.is_qty_managed === false) {
+    return { label: 'Qty Not Managed', color: 'success' };
+  }
   const stock = item.total_stock || item.stock || 0;
   if (stock === 0) return { label: 'Out of Stock', color: 'error' };
   if (stock <= (item.minStock || 5)) return { label: 'Low Stock', color: 'warning' };
@@ -181,10 +184,17 @@ const InventoryItemsTable = ({
                               <EditIcon />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Add Stock">
-                            <IconButton size="large" color="secondary" onClick={() => onAddStock(item)}>
-                              <AddIcon />
-                            </IconButton>
+                          <Tooltip title={item.is_qty_managed === 0 || item.is_qty_managed === false ? "Qty Not Managed" : "Add Stock"}>
+                            <span>
+                              <IconButton 
+                                size="large" 
+                                color="secondary" 
+                                onClick={() => onAddStock(item)}
+                                disabled={item.is_qty_managed === 0 || item.is_qty_managed === false}
+                              >
+                                <AddIcon />
+                              </IconButton>
+                            </span>
                           </Tooltip>
                           <Tooltip title="View Stock Details">
                             <IconButton size="large" color="info" onClick={() => onViewStockBatch(item)}>

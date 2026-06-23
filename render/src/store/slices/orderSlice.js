@@ -308,7 +308,8 @@ const orderSlice = createSlice({
       } = action.payload;
 
       const safeQuantity = Math.max(1, parseInt(quantity, 10) || 1);
-      const maxVariantStock = toOptionalNumber(itemVariant.total_stock ?? itemVariant.totalStock);
+      const isQtyManaged = itemVariant.is_qty_managed !== 0 && itemVariant.is_qty_managed !== false;
+      const maxVariantStock = isQtyManaged ? toOptionalNumber(itemVariant.total_stock ?? itemVariant.totalStock) : null;
       const variantExistingQty = state.currentOrder.items
         .filter((item) => item.itemVariantId === itemVariant.id)
         .reduce((sum, item) => sum + toNumber(item.quantity, 0), 0);

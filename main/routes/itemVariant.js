@@ -7,7 +7,7 @@ router.get('/', (req, res) => {
   const db = getDatabase();
   try {
     const rows = db.prepare(`
-      SELECT iv.*, i.name as item_name, NULL as gender,
+      SELECT iv.*, i.name as item_name, NULL as gender, i.is_qty_managed,
              i.category_id as category_id, v.variant_name, c.name as category_name,
              b.id as brand_id, b.brand_name as brand_name,
              b.is_discount_active as brand_discount_active,
@@ -53,7 +53,7 @@ router.get('/:id', (req, res) => {
 
   try {
     const row = db.prepare(`
-      SELECT iv.*, i.name as item_name, i.image, NULL as gender,
+      SELECT iv.*, i.name as item_name, i.image, NULL as gender, i.is_qty_managed,
              i.category_id as category_id, v.variant_name, c.name as category_name,
              b.id as brand_id, b.brand_name as brand_name,
              b.is_discount_active as brand_discount_active,
@@ -242,7 +242,7 @@ router.get('/barcode/:barcode', (req, res) => {
 
   try {
     const row = db.prepare(`
-      SELECT iv.*, i.name as item_name, i.image, NULL as gender,
+      SELECT iv.*, i.name as item_name, i.image, NULL as gender, i.is_qty_managed,
              v.variant_name, c.name as category_name,
              b.id as brand_id, b.brand_name as brand_name,
              b.is_discount_active as brand_discount_active,

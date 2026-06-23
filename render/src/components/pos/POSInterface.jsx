@@ -116,7 +116,9 @@ const POSInterface = () => {
       .filter((item) => item.itemVariantId === variantId)
       .reduce((sum, item) => sum + (parseFloat(item.quantity || 0) || 0), 0);
 
-    if (safeTotalStock !== null && variantQtyInOrder >= safeTotalStock) {
+    const isQtyManaged = itemVariant.is_qty_managed !== 0 && itemVariant.is_qty_managed !== false;
+
+    if (isQtyManaged && safeTotalStock !== null && variantQtyInOrder >= safeTotalStock) {
       toast.error(`Only ${safeTotalStock} units available in stock`);
       return;
     }
@@ -180,10 +182,16 @@ const POSInterface = () => {
       }
 
       const itemVariant = await response.json();
+      const isQtyManaged = itemVariant.is_qty_managed !== 0 && itemVariant.is_qty_managed !== false;
       const batches = itemVariant.available_batches || [];
 
+      if (!isQtyManaged) {
+        addItemWithPrice(itemVariant, parseFloat(itemVariant.selling_price || 0), barcode);
+        return;
+      }
+
       // Check if item has stock
-      if (batches.length === 0) {
+      if (isQtyManaged && batches.length === 0) {
         toast.error(`${itemVariant.item_name} is out of stock`);
         return;
       }
@@ -251,9 +259,15 @@ const POSInterface = () => {
         return;
       }
       const freshData = await response.json();
+      const isQtyManaged = freshData.is_qty_managed !== 0 && freshData.is_qty_managed !== false;
       const batches = freshData.available_batches || [];
 
-      if (batches.length === 0) {
+      if (!isQtyManaged) {
+        addItemWithPrice(freshData, parseFloat(freshData.selling_price || itemVariant.selling_price || 0), null);
+        return;
+      }
+
+      if (isQtyManaged && batches.length === 0) {
         toast.error(`${itemVariant.item_name} is out of stock`);
         return;
       }
@@ -485,8 +499,9 @@ const POSInterface = () => {
             <Grid container spacing={1.5}>
               {(filteredItems || []).slice(posPage * posRowsPerPage, posPage * posRowsPerPage + posRowsPerPage).map((item) => {
                 if (!item) return null;
-                const stockStatus = getStockStatus(item.total_stock || 0);
-                const isOutOfStock = (item.total_stock || 0) <= 0;
+                const isQtyManaged = item.is_qty_managed !== 0 && item.is_qty_managed !== false;
+                const stockStatus = isQtyManaged ? getStockStatus(item.total_stock || 0) : { label: 'Qty Not Managed', color: 'success' };
+                const isOutOfStock = isQtyManaged ? ((item.total_stock || 0) <= 0) : false;
                 return (
                   <Grid item xs={12} key={item.id}>
                     <Card
@@ -585,7 +600,7 @@ const POSInterface = () => {
 
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                           <Typography variant="caption" color="text.secondary" noWrap>
-                            Stock: {(item.total_stock || 0)} units
+                            {isQtyManaged ? `Stock: ${(item.total_stock || 0)} units` : 'Stock: Unlimited'}
                           </Typography>
 
                           <Chip

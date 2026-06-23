@@ -180,6 +180,7 @@ const AddProductDialog = ({
           id: itemId,
           name: item.item_name || item.name,
           category: item.category_name || item.category,
+          is_qty_managed: item.is_qty_managed !== undefined ? item.is_qty_managed : 1,
         });
       }
       return acc;
@@ -207,6 +208,7 @@ const AddProductDialog = ({
 
   const selectedItem = searchableItems.find(i => i.id === formData.item_id) || null;
   const selectedVariant = searchableVariants.find(v => v.id === formData.variant_id) || null;
+  const isQtyManaged = selectedItem ? (selectedItem.is_qty_managed !== 0 && selectedItem.is_qty_managed !== false) : true;
 
   const getNavigableFields = useCallback(() => {
     if (!formContentRef.current) return [];
@@ -272,14 +274,25 @@ const AddProductDialog = ({
       toast.error('Please select both item and variant');
       return;
     }
-    if (!formData.buyingPrice || !formData.quantity || !formData.sellingPrice) {
-      toast.error('Please fill in buying price, selling price, and quantity');
+
+    const item = searchableItems.find(i => i.id === formData.item_id);
+    const isQtyManaged = item ? (item.is_qty_managed !== 0 && item.is_qty_managed !== false) : true;
+
+    if (!formData.sellingPrice) {
+      toast.error('Please fill in selling price');
+      return;
+    }
+
+    if (isQtyManaged && (!formData.buyingPrice || !formData.quantity)) {
+      toast.error('Please fill in buying price and quantity');
       return;
     }
 
     const nextFormData = {
       ...formData,
       expireDate: normalizedExpireDate?.isoValue || '',
+      buyingPrice: isQtyManaged ? formData.buyingPrice : 0,
+      quantity: isQtyManaged ? formData.quantity : 0,
     };
 
     setExpireDateError('');
@@ -287,7 +300,7 @@ const AddProductDialog = ({
     setFormData(nextFormData);
     setPendingFormData(nextFormData);
     setConfirmAddOpen(true);
-  }, [expireDateInput, formData]);
+  }, [expireDateInput, formData, searchableItems]);
 
   const handleExpireDateChange = useCallback((event) => {
     const nextValue = event.target.value;
@@ -659,13 +672,13 @@ const AddProductDialog = ({
           <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
-              label="Buying Price *"
+              label={isQtyManaged ? "Buying Price *" : "Buying Price"}
               type="number"
               value={formData.buyingPrice}
               onChange={(e) => setFormData((prev) => ({ ...prev, buyingPrice: e.target.value }))}
               inputProps={{ 'data-nav-index': '4' }}
               InputProps={{ startAdornment: <InputAdornment position="start">Rs.</InputAdornment> }}
-              required
+              required={isQtyManaged}
             />
           </Grid>
 
@@ -687,12 +700,13 @@ const AddProductDialog = ({
           <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
-              label="Quantity *"
+              label={isQtyManaged ? "Quantity *" : "Quantity (Not Managed)"}
               type="number"
-              value={formData.quantity}
+              value={isQtyManaged ? formData.quantity : ''}
               onChange={(e) => setFormData((prev) => ({ ...prev, quantity: e.target.value }))}
               inputProps={{ 'data-nav-index': '6' }}
-              required
+              required={isQtyManaged}
+              disabled={!isQtyManaged}
             />
           </Grid>
 
@@ -786,12 +800,20 @@ const AddProductDialog = ({
             <Typography variant="body2" fontWeight="bold">{selectedVariant?.variant_name || '-'}</Typography>
             <Typography variant="body2" color="text.secondary">Barcode</Typography>
             <Typography variant="body2" fontWeight="bold">{formData.barcode || '-'}</Typography>
-            <Typography variant="body2" color="text.secondary">Buying Price</Typography>
-            <Typography variant="body2" fontWeight="bold">Rs. {formData.buyingPrice || '0'}</Typography>
+            {isQtyManaged && (
+              <>
+                <Typography variant="body2" color="text.secondary">Buying Price</Typography>
+                <Typography variant="body2" fontWeight="bold">Rs. {formData.buyingPrice || '0'}</Typography>
+              </>
+            )}
             <Typography variant="body2" color="text.secondary">Selling Price</Typography>
             <Typography variant="body2" fontWeight="bold">Rs. {formData.sellingPrice || '0'}</Typography>
-            <Typography variant="body2" color="text.secondary">Quantity</Typography>
-            <Typography variant="body2" fontWeight="bold">{formData.quantity || '0'}</Typography>
+            {isQtyManaged && (
+              <>
+                <Typography variant="body2" color="text.secondary">Quantity</Typography>
+                <Typography variant="body2" fontWeight="bold">{formData.quantity || '0'}</Typography>
+              </>
+            )}
             <Typography variant="body2" color="text.secondary">Expire Date</Typography>
             <Typography variant="body2" fontWeight="bold">{pendingFormData?.expireDate ? formatExpiryDateForDisplay(pendingFormData.expireDate) : '-'}</Typography>
             <Typography variant="body2" color="text.secondary">Discount Active</Typography>

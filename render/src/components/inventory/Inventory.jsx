@@ -136,11 +136,20 @@ const Inventory = () => {
 
   // ── Memoized derived lists (Fix 3) ──────────────────────────────────────────
   const lowStockItems = useMemo(
-    () => itemVariants.filter(item => { const s = item.total_stock || item.stock || 0; return s <= (item.minStock || 5) && s > 0; }),
+    () => itemVariants.filter(item => {
+      const isQtyManaged = item.is_qty_managed !== 0 && item.is_qty_managed !== false;
+      if (!isQtyManaged) return false;
+      const s = item.total_stock || item.stock || 0;
+      return s <= (item.minStock || 5) && s > 0;
+    }),
     [itemVariants]
   );
   const outOfStockItems = useMemo(
-    () => itemVariants.filter(item => (item.total_stock || item.stock || 0) === 0),
+    () => itemVariants.filter(item => {
+      const isQtyManaged = item.is_qty_managed !== 0 && item.is_qty_managed !== false;
+      if (!isQtyManaged) return false;
+      return (item.total_stock || item.stock || 0) === 0;
+    }),
     [itemVariants]
   );
 
@@ -219,15 +228,24 @@ const Inventory = () => {
 
   const handleSaveItemVariant = useCallback(async (formData) => {
     if (!formData.item_id || !formData.variant_id) { toast.error('Please select both item and variant'); return; }
-    if (!formData.buyingPrice || !formData.quantity || !formData.sellingPrice) { toast.error('Please fill in buying price, selling price, and quantity'); return; }
+    
+    const item = itemVariants.find(i => (i.item_id_ref || i.id) === formData.item_id);
+    const isQtyManaged = item ? (item.is_qty_managed !== 0 && item.is_qty_managed !== false) : true;
+
+    if (!formData.sellingPrice) { toast.error('Please fill in selling price'); return; }
+    if (isQtyManaged && (!formData.buyingPrice || !formData.quantity)) {
+      toast.error('Please fill in buying price and quantity');
+      return;
+    }
+
     try {
       const itemVariantResponse = await api.itemVariants.create({ item_id: formData.item_id, variant_id: formData.variant_id, barcode: formData.barcode || null, staff_id: user?.id, is_discount_active: formData.isDiscountActive || false, discount_type: formData.discountType || 'percentage', discount_value: parseFloat(formData.discountValue) || 0 });
-      await api.stock.addBatch({ item_variant_id: itemVariantResponse.id, buyingPrice: parseFloat(formData.buyingPrice), sellingPrice: parseFloat(formData.sellingPrice), quantity: parseInt(formData.quantity), description: formData.description || null, expire_date: formData.expireDate || null });
-      toast.success('Product added successfully with stock!');
+      await api.stock.addBatch({ item_variant_id: itemVariantResponse.id, buyingPrice: isQtyManaged ? parseFloat(formData.buyingPrice) : 0, sellingPrice: parseFloat(formData.sellingPrice), quantity: isQtyManaged ? parseInt(formData.quantity) : 0, description: formData.description || null, expire_date: formData.expireDate || null });
+      toast.success('Product added successfully!');
       dispatch(fetchItemVariants());
       setAddItemVariantDialog(false);
     } catch (e) { toast.error('Failed to add product: ' + e.message); }
-  }, [dispatch, user?.id]);
+  }, [dispatch, user?.id, itemVariants]);
 
   const handleVariantCreated = useCallback(() => {
     dispatch(fetchVariants());
