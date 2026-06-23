@@ -232,15 +232,19 @@ const Inventory = () => {
     const item = itemVariants.find(i => (i.item_id_ref || i.id) === formData.item_id);
     const isQtyManaged = item ? (item.is_qty_managed !== 0 && item.is_qty_managed !== false) : true;
 
+    if (!formData.buyingPrice) {
+      toast.error('Please fill in buying price / estimated cost');
+      return;
+    }
     if (!formData.sellingPrice) { toast.error('Please fill in selling price'); return; }
-    if (isQtyManaged && (!formData.buyingPrice || !formData.quantity)) {
-      toast.error('Please fill in buying price and quantity');
+    if (isQtyManaged && !formData.quantity) {
+      toast.error('Please fill in quantity');
       return;
     }
 
     try {
       const itemVariantResponse = await api.itemVariants.create({ item_id: formData.item_id, variant_id: formData.variant_id, barcode: formData.barcode || null, staff_id: user?.id, is_discount_active: formData.isDiscountActive || false, discount_type: formData.discountType || 'percentage', discount_value: parseFloat(formData.discountValue) || 0 });
-      await api.stock.addBatch({ item_variant_id: itemVariantResponse.id, buyingPrice: isQtyManaged ? parseFloat(formData.buyingPrice) : 0, sellingPrice: parseFloat(formData.sellingPrice), quantity: isQtyManaged ? parseInt(formData.quantity) : 0, description: formData.description || null, expire_date: formData.expireDate || null });
+      await api.stock.addBatch({ item_variant_id: itemVariantResponse.id, buyingPrice: parseFloat(formData.buyingPrice), sellingPrice: parseFloat(formData.sellingPrice), quantity: isQtyManaged ? parseInt(formData.quantity) : 0, description: formData.description || null, expire_date: formData.expireDate || null });
       toast.success('Product added successfully!');
       dispatch(fetchItemVariants());
       setAddItemVariantDialog(false);

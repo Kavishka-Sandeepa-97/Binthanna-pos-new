@@ -296,12 +296,15 @@ server.post('/api/stock-batch/add', (req, res) => {
     `).get(item_variant_id);
     const isQtyManaged = itemInfo ? (itemInfo.is_qty_managed !== 0 && itemInfo.is_qty_managed !== false) : true;
 
-    if (isQtyManaged && (!quantity || !buyingPrice)) {
-      return res.status(400).json({ error: 'Missing required fields: quantity, buyingPrice' });
+    if (!buyingPrice) {
+      return res.status(400).json({ error: 'Missing required field: buyingPrice' });
+    }
+    if (isQtyManaged && !quantity) {
+      return res.status(400).json({ error: 'Missing required field: quantity' });
     }
 
     const finalQty = isQtyManaged ? parseInt(quantity) : 0;
-    const finalBuyPrice = isQtyManaged ? parseFloat(buyingPrice) : 0;
+    const finalBuyPrice = parseFloat(buyingPrice);
 
     const transaction = db.transaction(() => {
       // Create new stock batch
@@ -565,21 +568,35 @@ server.put('/api/item-variants/:id/update-full', upload.single('image'), (req, r
         }
       }
     } else {
-      // If not qty managed, we can still save/update the sell_price in stock_batch if sellingPrice is provided
-      if (sellingPrice !== undefined && sellingPrice !== null && sellingPrice !== '') {
+      // If not qty managed, we can still save/update the sell_price and buy_price in stock_batch
+      if (
+        (sellingPrice !== undefined && sellingPrice !== null && sellingPrice !== '') ||
+        (buyingPrice !== undefined && buyingPrice !== null && buyingPrice !== '')
+      ) {
         const latestBatch = db.prepare(
-          'SELECT id FROM stock_batch WHERE item_variant_id = ? ORDER BY created_at DESC, id DESC LIMIT 1'
+          'SELECT id, buy_price, sell_price FROM stock_batch WHERE item_variant_id = ? ORDER BY created_at DESC, id DESC LIMIT 1'
         ).get(id);
 
+        const resolvedSellPrice =
+          sellingPrice !== undefined && sellingPrice !== null && sellingPrice !== ''
+            ? parseFloat(sellingPrice)
+            : parseFloat(latestBatch?.sell_price || 0);
+
+        const resolvedBuyPrice =
+          buyingPrice !== undefined && buyingPrice !== null && buyingPrice !== ''
+            ? parseFloat(buyingPrice)
+            : parseFloat(latestBatch?.buy_price || 0);
+
         if (latestBatch) {
-          db.prepare('UPDATE stock_batch SET sell_price = ?, updated_at = ? WHERE id = ?')
-            .run(parseFloat(sellingPrice), getCurrentUTCTimestamp(), latestBatch.id);
+          db.prepare('UPDATE stock_batch SET sell_price = ?, buy_price = ?, updated_at = ? WHERE id = ?')
+            .run(resolvedSellPrice, resolvedBuyPrice, getCurrentUTCTimestamp(), latestBatch.id);
         } else {
           db.prepare(
-            'INSERT INTO stock_batch (item_variant_id, initial_qty, remaining_qty, buy_price, sell_price, description, created_at) VALUES (?, 0, 0, 0, ?, ?, ?)'
+            'INSERT INTO stock_batch (item_variant_id, initial_qty, remaining_qty, buy_price, sell_price, description, created_at) VALUES (?, 0, 0, ?, ?, ?, ?)'
           ).run(
             id,
-            parseFloat(sellingPrice),
+            resolvedBuyPrice,
+            resolvedSellPrice,
             description || null,
             getCurrentUTCTimestamp()
           );

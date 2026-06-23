@@ -219,7 +219,7 @@ export const StockBatchDialog = ({
                   <TableCell>Date</TableCell>
                   <TableCell>Type</TableCell>
                   <TableCell>Selling Price</TableCell>
-                  <TableCell>Buying Price</TableCell>
+                  <TableCell>Buying Price / Est. Cost</TableCell>
                   <TableCell>Profit %</TableCell>
                   {stockFilters.type === 'sale' && (
                     <>
@@ -416,7 +416,7 @@ export const EditStockBatchDialog = ({
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
-              label="Buying Price"
+              label="Buying Price / Est. Cost"
               type="number"
               value={editStockBatchData.buy_price}
               onChange={(e) => setEditStockBatchData({ ...editStockBatchData, buy_price: e.target.value })}

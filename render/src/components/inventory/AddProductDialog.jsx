@@ -278,20 +278,25 @@ const AddProductDialog = ({
     const item = searchableItems.find(i => i.id === formData.item_id);
     const isQtyManaged = item ? (item.is_qty_managed !== 0 && item.is_qty_managed !== false) : true;
 
+    if (!formData.buyingPrice) {
+      toast.error(isQtyManaged ? 'Please fill in buying price' : 'Please fill in buying price / estimated cost');
+      return;
+    }
+
     if (!formData.sellingPrice) {
       toast.error('Please fill in selling price');
       return;
     }
 
-    if (isQtyManaged && (!formData.buyingPrice || !formData.quantity)) {
-      toast.error('Please fill in buying price and quantity');
+    if (isQtyManaged && !formData.quantity) {
+      toast.error('Please fill in quantity');
       return;
     }
 
     const nextFormData = {
       ...formData,
       expireDate: normalizedExpireDate?.isoValue || '',
-      buyingPrice: isQtyManaged ? formData.buyingPrice : 0,
+      buyingPrice: formData.buyingPrice,
       quantity: isQtyManaged ? formData.quantity : 0,
     };
 
@@ -672,13 +677,13 @@ const AddProductDialog = ({
           <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
-              label={isQtyManaged ? "Buying Price *" : "Buying Price"}
+              label="Buying Price / Est. Cost *"
               type="number"
               value={formData.buyingPrice}
               onChange={(e) => setFormData((prev) => ({ ...prev, buyingPrice: e.target.value }))}
               inputProps={{ 'data-nav-index': '4' }}
               InputProps={{ startAdornment: <InputAdornment position="start">Rs.</InputAdornment> }}
-              required={isQtyManaged}
+              required
             />
           </Grid>
 
