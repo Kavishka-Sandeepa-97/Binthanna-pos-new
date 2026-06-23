@@ -61,8 +61,8 @@ const MainLayout = ({ children }) => {
     { text: 'Inventory', icon: <Inventory />, path: '/inventory', view: 'inventory' },
     { text: 'In/Out', icon: <Receipt />, path: '/inout', view: 'inout' },
     { text: 'Reports', icon: <Analytics />, path: '/reports', view: 'reports' },
-    { text: 'Stock Manage', icon: <Inventory />, path: '/stock', view: 'stock', color: '#FF9800', hoverBg: 'rgba(255, 152, 0, 0.15)' },
-    { text: 'Stock Report', icon: <Analytics />, path: '/stock-report', view: 'stock-report', color: '#E91E63', hoverBg: 'rgba(233, 30, 99, 0.15)' },
+    { text: 'Stock Manage', icon: <Inventory />, path: '/stock', view: 'stock', color: '#4ECDC4', hoverBg: 'rgba(78, 205, 196, 0.15)' },
+    { text: 'Stock Report', icon: <Analytics />, path: '/stock-report', view: 'stock-report', color: '#3CAEA3', hoverBg: 'rgba(60, 174, 163, 0.15)' },
     { text: 'Settings', icon: <Settings />, path: '/settings', view: 'settings' },
   ];
 
