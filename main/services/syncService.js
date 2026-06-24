@@ -11,6 +11,124 @@ if (typeof global.WebSocket === 'undefined') {
 const { createClient } = require('@supabase/supabase-js');
 const { getDatabase } = require('../database/init');
 
+// Foreign Key Mapping for Self-Healing Dependency Resolution
+const FOREIGN_KEY_MAP = {
+  cashier_shift: [
+    { col: 'user_id', parentTable: 'users', parentCol: 'id' }
+  ],
+  category: [
+    { col: 'parent_id', parentTable: 'category', parentCol: 'id' }
+  ],
+  item: [
+    { col: 'category_id', parentTable: 'category', parentCol: 'id' },
+    { col: 'brand_id', parentTable: 'brand', parentCol: 'id' }
+  ],
+  item_variant: [
+    { col: 'variant_id', parentTable: 'variant', parentCol: 'id' },
+    { col: 'item_id', parentTable: 'item', parentCol: 'id' }
+  ],
+  orders: [
+    { col: 'user_id', parentTable: 'users', parentCol: 'id' }
+  ],
+  item_variant_order: [
+    { col: 'item_variant_id', parentTable: 'item_variant', parentCol: 'id' },
+    { col: 'order_id', parentTable: 'orders', parentCol: 'id' },
+    { col: 'stock_batch_id', parentTable: 'stock_batch', parentCol: 'id' }
+  ],
+  returns: [
+    { col: 'user_id', parentTable: 'users', parentCol: 'id' },
+    { col: 'item_variant_order_id', parentTable: 'item_variant_order', parentCol: 'id' },
+    { col: 'order_id', parentTable: 'orders', parentCol: 'id' }
+  ],
+  sell_price_history: [
+    { col: 'item_variant_id', parentTable: 'item_variant', parentCol: 'id' },
+    { col: 'user_id', parentTable: 'users', parentCol: 'id' },
+    { col: 'stock_batch_id', parentTable: 'stock_batch', parentCol: 'id' }
+  ],
+  in_out: [
+    { col: 'user_id', parentTable: 'users', parentCol: 'id' }
+  ],
+  stock_batch: [
+    { col: 'item_variant_id', parentTable: 'item_variant', parentCol: 'id' },
+    { col: 'supplier_id', parentTable: 'supplier', parentCol: 'id' }
+  ],
+  stock_product: [
+    { col: 'category_id', parentTable: 'stock_category', parentCol: 'id' },
+    { col: 'unit_id', parentTable: 'stock_unit', parentCol: 'id' }
+  ],
+  stock_transaction: [
+    { col: 'product_id', parentTable: 'stock_product', parentCol: 'id' },
+    { col: 'supplier_id', parentTable: 'stock_supplier', parentCol: 'id' },
+    { col: 'user_id', parentTable: 'users', parentCol: 'id' }
+  ]
+};
+
+const handleForeignKeyFailure = (db, table, rows) => {
+  const mappings = FOREIGN_KEY_MAP[table];
+  if (!mappings) return;
+
+  db.transaction(() => {
+    for (const map of mappings) {
+      const parentIds = rows
+        .map(row => row[map.col])
+        .filter(id => id !== null && id !== undefined);
+
+      if (parentIds.length > 0) {
+        // Build placeholders for SQL IN clause
+        const placeholders = parentIds.map(() => '?').join(',');
+        try {
+          console.log(`[Sync] Marking missing parent records in "${map.parentTable}" as unsynced (IDs: ${parentIds.join(', ')})`);
+          db.prepare(`UPDATE ${map.parentTable} SET is_synced = 0 WHERE ${map.parentCol} IN (${placeholders})`).run(...parentIds);
+        } catch (err) {
+          console.error(`[Sync] Failed to mark parents in "${map.parentTable}" as unsynced:`, err.message);
+        }
+      }
+    }
+  })();
+};
+
+const resetLocalSyncFlags = (db) => {
+  const tables = [
+    'users',
+    'cashier_shift',
+    'brand',
+    'category',
+    'item',
+    'variant',
+    'item_variant',
+    'global_discount_settings',
+    'orders',
+    'item_variant_order',
+    'returns',
+    'sell_price_history',
+    'in_out',
+    'supplier',
+    'stock_batch',
+    'stock_unit',
+    'stock_category',
+    'stock_supplier',
+    'stock_product',
+    'stock_transaction'
+  ];
+
+  db.transaction(() => {
+    for (const table of tables) {
+      try {
+        db.prepare(`UPDATE ${table} SET is_synced = 0`).run();
+      } catch (err) {
+        console.error(`[Sync] Failed to reset sync flag for table ${table}:`, err.message);
+      }
+    }
+    // Also clear deletions logs queue
+    try {
+      db.prepare('DELETE FROM deleted_records').run();
+    } catch (err) {
+      console.error('[Sync] Failed to clear deleted_records:', err.message);
+    }
+  })();
+};
+
+
 let syncInterval = null;
 let lastRunTime = 0;
 
@@ -55,13 +173,18 @@ const runSync = async () => {
     });
 
     // 3. Test Connection (Ping)
-    const { error: pingError } = await supabase.from('users').select('id').limit(1);
+    const { data: pingData, error: pingError } = await supabase.from('users').select('id').limit(1);
     if (pingError) {
       if (pingError.message && pingError.message.includes('fetch failed')) {
         throw new Error('Could not connect to Supabase. Please check your internet connection and Supabase URL.');
       } else {
         throw new Error(`Authentication/Connection failed: ${pingError.message}`);
       }
+    }
+
+    if (!pingData || pingData.length === 0) {
+      console.log('[Sync] Cloud database appears to be empty (0 users found). Resetting all local sync flags to force full upload...');
+      resetLocalSyncFlags(db);
     }
 
     // 4. Sync deletions first
@@ -141,6 +264,10 @@ const runSync = async () => {
         // Batch Upsert to Supabase
         const { error } = await supabase.from(table).upsert(cleanedRows);
         if (error) {
+          if (error.message && error.message.includes('violates foreign key constraint')) {
+            console.warn(`[Sync] Foreign key violation on table "${table}". Attempting to mark parent records as unsynced...`);
+            handleForeignKeyFailure(db, table, cleanedRows);
+          }
           throw new Error(`Upload failed on table "${table}": ${error.message}`);
         }
 
