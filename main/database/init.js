@@ -317,7 +317,6 @@ const createTables = () => {
       description TEXT,
       expire_date DATE,
       supplier_id INTEGER,
-      is_returned BOOLEAN DEFAULT 0,
       is_synced BOOLEAN DEFAULT 0,
       FOREIGN KEY (item_variant_id) REFERENCES item_variant(id),
       FOREIGN KEY (supplier_id) REFERENCES supplier(id)
@@ -440,7 +439,6 @@ const createIndexes = () => {
     'CREATE INDEX IF NOT EXISTS idx_orders_status_date ON orders(status, date)',
     // Return order related indexes
     'CREATE INDEX IF NOT EXISTS idx_orders_barcode ON orders(barcode)',
-    'CREATE INDEX IF NOT EXISTS idx_stock_batch_is_returned ON stock_batch(is_returned)',
     'CREATE INDEX IF NOT EXISTS idx_returns_order ON returns(order_id)',
     'CREATE INDEX IF NOT EXISTS idx_returns_item_variant_order ON returns(item_variant_order_id)',
     'CREATE INDEX IF NOT EXISTS idx_returns_user ON returns(user_id)',

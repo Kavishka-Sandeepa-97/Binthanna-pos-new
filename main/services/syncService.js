@@ -113,7 +113,6 @@ const runSync = async () => {
       'is_discount_active',
       'is_global_discount_active',
       'is_card_payment',
-      'is_returned',
       'is_enabled'
     ];
 

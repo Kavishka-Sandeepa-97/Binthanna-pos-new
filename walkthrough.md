@@ -275,8 +275,7 @@ CREATE TABLE IF NOT EXISTS stock_batch (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   description TEXT,
   expire_date DATE,
-  supplier_id BIGINT REFERENCES supplier(id) ON DELETE SET NULL,
-  is_returned BOOLEAN DEFAULT FALSE
+  supplier_id BIGINT REFERENCES supplier(id) ON DELETE SET NULL
 );
 
 -- 16. Stock Unit
