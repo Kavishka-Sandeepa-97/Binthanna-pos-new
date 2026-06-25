@@ -241,6 +241,7 @@ const orderSlice = createSlice({
           unit_price: toNumber(item.unit_price || item.price, 0),
           original_price: toNumber(item.original_price || item.unit_price || item.price, 0),
           batch_allocations: item.batch_allocations || [],
+          reason: item.reason || item.description || '',
         }));
 
       state.currentOrder = {
@@ -290,6 +291,7 @@ const orderSlice = createSlice({
           unit_price: toNumber(item.unit_price, 0),
           original_price: toNumber(item.original_price, toNumber(item.unit_price, 0)),
           batch_allocations: Array.isArray(item.batch_allocations) ? item.batch_allocations : [],
+          reason: item.reason || '',
         })),
       };
 

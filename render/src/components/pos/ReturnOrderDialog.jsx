@@ -68,7 +68,6 @@ const ReturnOrderDialog = ({ open, onClose }) => {
   const [returnableItems, setReturnableItems] = useState([]);
   const [selectedQtyByItem, setSelectedQtyByItem] = useState({});
   const [itemReasons, setItemReasons] = useState({});
-  const [reason, setReason] = useState('');
   const [actionTypeDialogOpen, setActionTypeDialogOpen] = useState(false);
   const [processingReturn, setProcessingReturn] = useState(false);
   const [confirmRefundDialogOpen, setConfirmRefundDialogOpen] = useState(false);
@@ -111,7 +110,6 @@ const ReturnOrderDialog = ({ open, onClose }) => {
       setReturnableItems(items);
       setSelectedQtyByItem({});
       setItemReasons({});
-      setReason('');
     } catch (error) {
       toast.error(`Failed to load returnable items: ${error.message}`);
     } finally {
@@ -165,7 +163,7 @@ const ReturnOrderDialog = ({ open, onClose }) => {
           unit_price: item.unit_price,
           original_price: item.original_price,
           batch_allocations: item.batch_allocations,
-          description: item.reason || reason || null,
+          description: item.reason || null,
         })),
         additional_charges: 0,
         customer_name: selectedOrder.customer_name || '',
@@ -176,7 +174,7 @@ const ReturnOrderDialog = ({ open, onClose }) => {
         status: 'completed',
         is_return: true,
         original_order_id: selectedOrder.id,
-        credit_reason: reason || null,
+        credit_reason: null,
       };
 
       const result = await ordersAPI.create(orderData);
@@ -204,7 +202,7 @@ const ReturnOrderDialog = ({ open, onClose }) => {
     dispatch(startReturnOrder({
       originalOrderId: selectedOrder.id,
       customerName: selectedOrder.customer_name || '',
-      returnReason: reason,
+      returnReason: '',
       returnedItems,
     }));
 
@@ -441,14 +439,6 @@ const ReturnOrderDialog = ({ open, onClose }) => {
                     <Typography variant="body2">Selected Items: {selectedItemsCount}</Typography>
                     <Typography variant="body2" fontWeight="bold">Return Credit: {formatPrice(totalSelectedCredit)}</Typography>
                   </Box>
-
-                  <TextField
-                    label="Return Reason (optional)"
-                    fullWidth
-                    size="small"
-                    value={reason}
-                    onChange={(event) => setReason(event.target.value)}
-                  />
                 </>
               )}
             </Paper>
