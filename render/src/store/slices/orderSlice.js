@@ -53,9 +53,8 @@ const recalculateCurrentOrder = (order) => {
   }, 0);
 
   if (order.isReturnOrder) {
-    order.discount = 0;
     order.returnCreditTotal = calculateReturnCredit(order.returnedItems);
-    order.total = order.subtotal + toNumber(order.additionalCharges, 0) - order.returnCreditTotal;
+    order.total = order.subtotal + toNumber(order.additionalCharges, 0) - toNumber(order.discount, 0) - order.returnCreditTotal;
     return;
   }
 
@@ -328,29 +327,27 @@ const orderSlice = createSlice({
       let discountAmount = 0;
       let finalPrice = originalPrice;
 
-      if (!state.currentOrder.isReturnOrder) {
-        const globalActive =
-          globalDiscountSettings &&
-          globalDiscountSettings.is_global_discount_active &&
-          toNumber(globalDiscountSettings.global_discount_value, 0) > 0;
+      const globalActive =
+        globalDiscountSettings &&
+        globalDiscountSettings.is_global_discount_active &&
+        toNumber(globalDiscountSettings.global_discount_value, 0) > 0;
 
-        if (!globalActive && itemVariant.is_discount_active && itemVariant.discount_type && toNumber(itemVariant.discount_value, 0) > 0) {
-          discountSource = 'item';
-          discountType = itemVariant.discount_type;
-          discountValue = toNumber(itemVariant.discount_value, 0);
-          discountAmount = discountType === 'percentage'
-            ? Math.round((originalPrice * discountValue / 100) * 100) / 100
-            : discountValue;
-          finalPrice = Math.max(0, originalPrice - discountAmount);
-        } else if (!globalActive && itemVariant.brand_discount_active && itemVariant.brand_discount_type && toNumber(itemVariant.brand_discount_value, 0) > 0) {
-          discountSource = 'brand';
-          discountType = itemVariant.brand_discount_type;
-          discountValue = toNumber(itemVariant.brand_discount_value, 0);
-          discountAmount = discountType === 'percentage'
-            ? Math.round((originalPrice * discountValue / 100) * 100) / 100
-            : discountValue;
-          finalPrice = Math.max(0, originalPrice - discountAmount);
-        }
+      if (!globalActive && itemVariant.is_discount_active && itemVariant.discount_type && toNumber(itemVariant.discount_value, 0) > 0) {
+        discountSource = 'item';
+        discountType = itemVariant.discount_type;
+        discountValue = toNumber(itemVariant.discount_value, 0);
+        discountAmount = discountType === 'percentage'
+          ? Math.round((originalPrice * discountValue / 100) * 100) / 100
+          : discountValue;
+        finalPrice = Math.max(0, originalPrice - discountAmount);
+      } else if (!globalActive && itemVariant.brand_discount_active && itemVariant.brand_discount_type && toNumber(itemVariant.brand_discount_value, 0) > 0) {
+        discountSource = 'brand';
+        discountType = itemVariant.brand_discount_type;
+        discountValue = toNumber(itemVariant.brand_discount_value, 0);
+        discountAmount = discountType === 'percentage'
+          ? Math.round((originalPrice * discountValue / 100) * 100) / 100
+          : discountValue;
+        finalPrice = Math.max(0, originalPrice - discountAmount);
       }
 
       const lineKey = buildOrderLineKey(itemVariant.id, finalPrice, preferredBatchId);
@@ -428,18 +425,11 @@ const orderSlice = createSlice({
     },
 
     setDiscount: (state, action) => {
-      if (state.currentOrder.isReturnOrder) {
-        return;
-      }
       state.currentOrder.discount = toNumber(action.payload, 0);
       recalculateCurrentOrder(state.currentOrder);
     },
 
     resetItemDiscount: (state, action) => {
-      if (state.currentOrder.isReturnOrder) {
-        return;
-      }
-
       const lineKey = action.payload;
       const item = state.currentOrder.items.find(
         (orderItem) => orderItem.lineKey === lineKey
@@ -460,10 +450,6 @@ const orderSlice = createSlice({
     },
 
     updateItemDiscount: (state, action) => {
-      if (state.currentOrder.isReturnOrder) {
-        return;
-      }
-
       const { lineKey, discountType, discountValue } = action.payload;
       const item = state.currentOrder.items.find(
         (orderItem) => orderItem.lineKey === lineKey

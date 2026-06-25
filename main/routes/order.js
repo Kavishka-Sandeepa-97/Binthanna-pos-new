@@ -186,14 +186,6 @@ const normalizeOrderDiscountForGlobalRules = (db, {
   discountValue,
   isReturn = false,
 }) => {
-  if (isReturn) {
-    return {
-      discountType: null,
-      discountValue: 0,
-      discountAmount: 0,
-    };
-  }
-
   const safeDiscountType = discountType || null;
   const safeDiscountValue = parseOptionalNumber(discountValue, 0);
 
@@ -619,7 +611,7 @@ router.get('/:id/returnable-items', (req, res) => {
 
   try {
     const order = db.prepare(`
-      SELECT id, barcode, date, customer_name, total_amount, status,
+      SELECT id, barcode, date, customer_name, total_amount, status, discount_type, discount_value,
              CASE WHEN (SELECT COUNT(*) FROM returns r WHERE r.order_id = o.id) > 0 THEN 1 ELSE 0 END as is_return
       FROM orders o
       WHERE id = ?
@@ -644,6 +636,10 @@ router.get('/:id/returnable-items', (req, res) => {
         ivo.qty,
         ivo.unit_price,
         ivo.original_price,
+        ivo.discount_source,
+        ivo.discount_type,
+        ivo.discount_value,
+        ivo.discount_amount,
         i.name as item_name,
         v.variant_name,
         iv.barcode
@@ -695,11 +691,20 @@ router.get('/:id/returnable-items', (req, res) => {
       return acc;
     }, {});
 
+    const orderSubtotal = items.reduce((sum, item) => sum + parseOptionalNumber(item.unit_price, 0) * parseOptionalNumber(item.qty, 0), 0);
+    const orderDiscountAmount = calculateDiscountAmount(orderSubtotal, order.discount_type, order.discount_value);
+
     const returnableItems = items
       .map((item) => {
         const soldQty = parseOptionalNumber(item.qty, 0);
         const alreadyReturnedQty = parseOptionalNumber(returnedQtyMap[item.item_variant_id], 0);
         const maxReturnableQty = Math.max(0, soldQty - alreadyReturnedQty);
+
+        // Calculate proportional order discount share for ONE unit of this item
+        const itemTotal = parseOptionalNumber(item.unit_price, 0) * soldQty;
+        const itemOrderDiscountShare = orderSubtotal > 0 ? (orderDiscountAmount * itemTotal) / orderSubtotal : 0;
+        const orderDiscountPerUnit = soldQty > 0 ? itemOrderDiscountShare / soldQty : 0;
+        const netUnitPrice = Math.max(0, parseOptionalNumber(item.unit_price, 0) - orderDiscountPerUnit);
 
         return {
           ...item,
@@ -707,6 +712,8 @@ router.get('/:id/returnable-items', (req, res) => {
           already_returned_qty: alreadyReturnedQty,
           max_returnable_qty: maxReturnableQty,
           batch_allocations: allocationMap[item.order_item_id] || [],
+          order_discount_per_unit: Math.round(orderDiscountPerUnit * 100) / 100,
+          net_unit_price: Math.round(netUnitPrice * 100) / 100,
         };
       })
       .filter((item) => item.max_returnable_qty > 0);
@@ -896,8 +903,8 @@ router.post('/', (req, res) => {
 
   const safeAdditionalCharges = parseOptionalNumber(additional_charges, 0);
   const safeTenderCash = tender_cash === undefined ? null : parseOptionalNumber(tender_cash, 0);
-  const requestedDiscountValue = safeIsReturn ? 0 : parseOptionalNumber(discount_value, 0);
-  const requestedDiscountType = safeIsReturn ? null : (discount_type || null);
+  const requestedDiscountValue = (safeIsReturn && normalizedItems.length === 0) ? 0 : parseOptionalNumber(discount_value, 0);
+  const requestedDiscountType = (safeIsReturn && normalizedItems.length === 0) ? null : (discount_type || null);
   let safeOriginalOrderId = null;
   try {
     safeOriginalOrderId = safeIsReturn ? parsePositiveInteger(original_order_id, 'original_order_id') : null;
@@ -926,7 +933,7 @@ router.post('/', (req, res) => {
     subtotal,
     discountType: requestedDiscountType,
     discountValue: requestedDiscountValue,
-    isReturn: safeIsReturn,
+    isReturn: safeIsReturn && normalizedItems.length === 0,
   });
 
   const discountAmount = normalizedDiscount.discountAmount;
@@ -934,8 +941,8 @@ router.post('/', (req, res) => {
   const computedCreditApplied = safeIsReturn ? Math.max(totalAmount, 0) : 0;
 
   const transaction = db.transaction(() => {
-    // If it's a return order, we insert records directly into the returns table
-    if (safeIsReturn) {
+    // If it's a pure return order (is_return = true AND items is empty)
+    if (safeIsReturn && normalizedItems.length === 0) {
       const originalOrder = db.prepare(`
         SELECT id, status
         FROM orders
@@ -980,7 +987,7 @@ router.post('/', (req, res) => {
           refundAmount,
           returnItem.source_order_item_id,
           safeOriginalOrderId,
-          safeCreditReason || returnItem.description
+          returnItem.description || safeCreditReason
         );
 
         // Restore stock batch qty
@@ -1007,7 +1014,63 @@ router.post('/', (req, res) => {
       return returnResults[0];
     }
 
-    // Normal order placement
+    // Exchange order return items processing
+    if (safeIsReturn && normalizedItems.length > 0) {
+      const originalOrder = db.prepare(`
+        SELECT id, status
+        FROM orders
+        WHERE id = ?
+      `).get(safeOriginalOrderId);
+
+      if (!originalOrder) {
+        throw new Error('Original order not found');
+      }
+      if (originalOrder.status !== 'completed') {
+        throw new Error('Only completed orders can be returned');
+      }
+
+      validateReturnQuantities(db, safeOriginalOrderId, normalizedReturnItems);
+
+      for (const returnItem of normalizedReturnItems) {
+        const originalItem = db.prepare(`
+          SELECT id, stock_batch_id, unit_price
+          FROM item_variant_order
+          WHERE id = ?
+        `).get(returnItem.source_order_item_id);
+
+        if (!originalItem) {
+          throw new Error(`Original order item not found for source_order_item_id ${returnItem.source_order_item_id}`);
+        }
+
+        const refundAmount = returnItem.unit_price * returnItem.qty;
+        db.prepare(`
+          INSERT INTO returns (
+            qty,
+            user_id,
+            total_refund_amount,
+            item_variant_order_id,
+            order_id,
+            reason,
+            is_synced
+          ) VALUES (?, ?, ?, ?, ?, ?, 0)
+        `).run(
+          returnItem.qty,
+          userId,
+          refundAmount,
+          returnItem.source_order_item_id,
+          safeOriginalOrderId,
+          returnItem.description || safeCreditReason
+        );
+
+        // Restore stock batch qty
+        if (originalItem.stock_batch_id) {
+          db.prepare('UPDATE stock_batch SET remaining_qty = remaining_qty + ?, is_synced = 0, updated_at = ? WHERE id = ?')
+            .run(returnItem.qty, getCurrentUTCTimestamp(), originalItem.stock_batch_id);
+        }
+      }
+    }
+
+    // Normal order or Exchange order placement
     const orderResult = db.prepare(`
       INSERT INTO orders (
         user_id,
@@ -1039,7 +1102,7 @@ router.post('/', (req, res) => {
       status,
       safeIsCardPayment,
       orderBarcode,
-      0 // credit_from_return
+      safeIsReturn ? returnCreditTotal : 0
     );
 
     const orderId = orderResult.lastInsertRowid;

@@ -108,16 +108,6 @@ const OrderSummary = ({ view = 'full' }) => {
     : '';
 
   const effectiveOrderDiscount = useMemo(() => {
-    if (currentOrder.isReturnOrder) {
-      return {
-        discountType: null,
-        discountValue: 0,
-        discountAmount: 0,
-        blockedByMinimum: false,
-        minimumOrderAmount: 0,
-      };
-    }
-
     const safeSubtotal = parseFloat(currentOrder.subtotal || 0) || 0;
     const safeDiscountType = discountType || null;
     const safeDiscountValue = parseFloat(discountValue || 0) || 0;
@@ -180,19 +170,6 @@ const OrderSummary = ({ view = 'full' }) => {
   }, []);
 
   useEffect(() => {
-    if (currentOrder.isReturnOrder) {
-      if (discountType !== 'fixed') {
-        setDiscountType('fixed');
-      }
-      if (discountValue !== '') {
-        setDiscountValue('');
-      }
-      if (currentOrder.discount !== 0) {
-        dispatch(setDiscount(0));
-      }
-      return;
-    }
-
     if (globalDiscountSettings?.is_global_discount_active && parseFloat(globalDiscountSettings.global_discount_value) > 0) {
       const gType = globalDiscountSettings.global_discount_type;
       const gValue = parseFloat(globalDiscountSettings.global_discount_value);
@@ -290,10 +267,10 @@ const OrderSummary = ({ view = 'full' }) => {
     qty: item.quantity,
     unit_price: item.price,
     original_price: item.originalPrice || item.price,
-    discount_source: currentOrder.isReturnOrder ? null : (item.discountSource || null),
-    discount_type: currentOrder.isReturnOrder ? null : (item.discountType || null),
-    discount_value: currentOrder.isReturnOrder ? 0 : (item.discountValue || 0),
-    discount_amount: currentOrder.isReturnOrder ? 0 : (item.discountAmount || 0),
+    discount_source: item.discountSource || null,
+    discount_type: item.discountType || null,
+    discount_value: item.discountValue || 0,
+    discount_amount: item.discountAmount || 0,
     preferred_batch_id: item.preferredBatchId || null,
   }));
 
@@ -304,6 +281,7 @@ const OrderSummary = ({ view = 'full' }) => {
     unit_price: item.unit_price,
     original_price: item.original_price || item.unit_price,
     batch_allocations: Array.isArray(item.batch_allocations) ? item.batch_allocations : [],
+    description: item.reason || item.description || null,
   }));
 
   const resetOrderUiState = () => {
@@ -656,7 +634,7 @@ const OrderSummary = ({ view = 'full' }) => {
             <Alert severity="warning" sx={{ mb: 2 }}>
               <Typography variant="body2">
                 <strong>Return Order Mode</strong>
-                {currentOrder.originalOrderId ? ` - Original Order #${currentOrder.originalOrderId}` : ''}. Discounts are disabled.
+                {currentOrder.originalOrderId ? ` - Original Order #${currentOrder.originalOrderId}` : ''}. Add items to exchange.
               </Typography>
             </Alert>
           )}
@@ -684,7 +662,7 @@ const OrderSummary = ({ view = 'full' }) => {
             ) : (
               <List dense>
                 {[...currentOrder.items].reverse().map((item, index) => {
-                  const discountVisual = !currentOrder.isReturnOrder && item.discountSource
+                  const discountVisual = item.discountSource
                     ? getDiscountVisual(item.discountSource)
                     : getDiscountVisual(null);
 
@@ -746,7 +724,7 @@ const OrderSummary = ({ view = 'full' }) => {
                           <Typography variant="subtitle2" fontWeight="bold" noWrap sx={{ lineHeight: 1.2, flex: 1, minWidth: 0 }}>
                             {item.itemName} {item.variantName && <span style={{ fontWeight: 'normal', color: '#666' }}>({item.variantName})</span>}
                           </Typography>
-                          {item.discountSource && !currentOrder.isReturnOrder && (
+                          {item.discountSource && (
                             <Chip
                               icon={<LocalOffer sx={{ fontSize: '0.6rem !important' }} />}
                               label={`${item.discountSource === 'item' ? 'Item' : item.discountSource === 'brand' ? 'Brand' : item.discountSource === 'manual' ? 'Manual' : 'Global'}: ${item.discountType === 'percentage' ? item.discountValue + '%' : 'Rs.' + item.discountValue}`}
@@ -759,7 +737,7 @@ const OrderSummary = ({ view = 'full' }) => {
                       }
                       secondary={
                         <Box>
-                          {item.discountAmount > 0 && item.originalPrice && !currentOrder.isReturnOrder && (
+                          {item.discountAmount > 0 && item.originalPrice && (
                             <Typography variant="caption" sx={{ color: 'error.main', textDecoration: 'line-through', mr: 1 }}>
                               {formatPrice(item.originalPrice)}
                             </Typography>
@@ -814,12 +792,11 @@ const OrderSummary = ({ view = 'full' }) => {
                               >
                                 {formatPrice(item.total)}
                               </Typography>
-                              <Tooltip title={currentOrder.isReturnOrder ? 'Disabled for return orders' : 'Edit Discount'}>
+                              <Tooltip title="Edit Discount">
                                 <span>
                                   <IconButton
                                     size="small"
                                     color="primary"
-                                    disabled={currentOrder.isReturnOrder}
                                     onClick={() => {
                                       setEditDiscountItem(item.lineKey);
                                       setEditDiscountType(item.discountType || 'percentage');
@@ -831,12 +808,12 @@ const OrderSummary = ({ view = 'full' }) => {
                                   </IconButton>
                                 </span>
                               </Tooltip>
-                              <Tooltip title={currentOrder.isReturnOrder ? 'Disabled for return orders' : 'Reset to original price'}>
+                              <Tooltip title="Reset to original price">
                                 <span>
                                   <IconButton
                                     size="small"
                                     color="warning"
-                                    disabled={currentOrder.isReturnOrder || !item.discountSource}
+                                    disabled={!item.discountSource}
                                     onClick={() => dispatch(resetItemDiscount(item.lineKey))}
                                     sx={{ width: 34, height: 34, borderRadius: 1, bgcolor: '#fff8e1' }}
                                   >
@@ -855,7 +832,7 @@ const OrderSummary = ({ view = 'full' }) => {
                             </Box>
                           </Box>
 
-                          {!currentOrder.isReturnOrder && editDiscountItem === item.lineKey && (
+                          {editDiscountItem === item.lineKey && (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, p: 0.5, bgcolor: '#f0f4ff', borderRadius: 1 }}>
                               <Select
                                 size="small"
@@ -957,7 +934,7 @@ const OrderSummary = ({ view = 'full' }) => {
                       value={effectivePaymentMethod}
                       label="Payment"
                       onChange={(event) => setPaymentMethod(event.target.value)}
-                      disabled={currentOrder.isReturnOrder || currentOrder.total <= 0}
+                      disabled={currentOrder.total <= 0}
                     >
                       <MenuItem value="cash">Cash</MenuItem>
                       <MenuItem value="card">Card</MenuItem>
@@ -969,14 +946,14 @@ const OrderSummary = ({ view = 'full' }) => {
                   <Typography variant="body1">Subtotal</Typography>
                   <Typography variant="body1">
                     {formatPrice(
-                      currentOrder.items.some((item) => item.discountAmount > 0) && !currentOrder.isReturnOrder
+                      currentOrder.items.some((item) => item.discountAmount > 0)
                         ? currentOrder.items.reduce((sum, item) => sum + (item.originalPrice || item.price) * item.quantity, 0)
                         : currentOrder.subtotal
                     )}
                   </Typography>
                 </Box>
 
-                {!currentOrder.isReturnOrder && currentOrder.items.some((item) => item.discountAmount > 0) && (
+                {currentOrder.items.some((item) => item.discountAmount > 0) && (
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                     <Typography variant="body2" color="error.main">Item Discounts</Typography>
                     <Typography variant="body2" color="error.main">
@@ -985,7 +962,7 @@ const OrderSummary = ({ view = 'full' }) => {
                   </Box>
                 )}
 
-                {!currentOrder.isReturnOrder && effectiveOrderDiscount.discountAmount > 0 && (
+                {effectiveOrderDiscount.discountAmount > 0 && (
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                     <Typography variant="body2" color="warning.main">
                       {isGlobalDiscountActive ? 'Global Discount' : 'Order Discount'}
@@ -1014,34 +991,32 @@ const OrderSummary = ({ view = 'full' }) => {
                 </Box>
                 */}
 
-                {!currentOrder.isReturnOrder && (
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: showDiscountControls ? 1 : 2 }}>
-                    <Button
+                <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: showDiscountControls ? 1 : 2 }}>
+                  <Button
+                    size="small"
+                    variant={showDiscountControls ? 'contained' : 'outlined'}
+                    onClick={() => setShowDiscountControls((prev) => !prev)}
+                    sx={{
+                      textTransform: 'none',
+                      borderRadius: 2,
+                      fontWeight: 700,
+                      px: 1.5,
+                    }}
+                  >
+                    {showDiscountControls ? 'Hide Discount' : 'Global Discount'}
+                  </Button>
+
+                  {isGlobalDiscountActive && (
+                    <Chip
+                      label={globalDiscountIndicatorLabel}
                       size="small"
-                      variant={showDiscountControls ? 'contained' : 'outlined'}
-                      onClick={() => setShowDiscountControls((prev) => !prev)}
-                      sx={{
-                        textTransform: 'none',
-                        borderRadius: 2,
-                        fontWeight: 700,
-                        px: 1.5,
-                      }}
-                    >
-                      {showDiscountControls ? 'Hide Discount' : 'Global Discount'}
-                    </Button>
+                      color="warning"
+                      sx={{ fontWeight: 700 }}
+                    />
+                  )}
+                </Box>
 
-                    {isGlobalDiscountActive && (
-                      <Chip
-                        label={globalDiscountIndicatorLabel}
-                        size="small"
-                        color="warning"
-                        sx={{ fontWeight: 700 }}
-                      />
-                    )}
-                  </Box>
-                )}
-
-                {!currentOrder.isReturnOrder && showDiscountControls && (
+                {showDiscountControls && (
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <Typography variant="body1">Discount</Typography>
@@ -1104,7 +1079,7 @@ const OrderSummary = ({ view = 'full' }) => {
                   </Box>
                 )}
 
-                {!currentOrder.isReturnOrder && showDiscountControls && effectiveOrderDiscount.blockedByMinimum && (
+                {showDiscountControls && effectiveOrderDiscount.blockedByMinimum && (
                   <Typography variant="caption" color="warning.main" sx={{ display: 'block', mb: 2 }}>
                     Global discount applies only for orders above {formatPrice(effectiveOrderDiscount.minimumOrderAmount)}.
                   </Typography>
