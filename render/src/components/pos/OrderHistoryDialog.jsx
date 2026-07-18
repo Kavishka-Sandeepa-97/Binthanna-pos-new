@@ -284,8 +284,8 @@ const OrderHistoryDialog = ({ open, onClose }) => {
 
       const storeInfo = {
         name: 'Binthanna Restaurant',
-        address: '275/B/5 Galahitiyawa,Ganemulla.',
-        phone: '071 160 0925 / 071 326 0021 (whatsapp)',
+        address: 'Kekirihena Mahaoya',
+        phone: '076 670 2231',
         receiptFooter: 'Thank you for your visit!'
       };
 
