@@ -62,15 +62,12 @@ const OrderSummary = ({ view = 'full' }) => {
   const { currentOrder, loading } = useSelector((state) => state.order);
   const { user, activeShift } = useSelector((state) => state.auth);
 
-  const [paymentDialog, setPaymentDialog] = useState(false);
   const [setActiveDialogOpen, setSetActiveDialogOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [amountPaid, setAmountPaid] = useState('');
   const [discountType, setDiscountType] = useState('fixed');
   const [discountValue, setDiscountValue] = useState('');
   const [showDiscountControls, setShowDiscountControls] = useState(false);
-  const [completedOrder, setCompletedOrder] = useState(null);
-  const [previewHtml, setPreviewHtml] = useState('');
   const [editDiscountItem, setEditDiscountItem] = useState(null);
   const [editDiscountType, setEditDiscountType] = useState('percentage');
   const [editDiscountValue, setEditDiscountValue] = useState('');
@@ -88,9 +85,6 @@ const OrderSummary = ({ view = 'full' }) => {
   const paidAmount = parseFloat(amountPaid || 0) || 0;
   const change = paidAmount - currentOrder.total;
 
-  const dialogTotal = parseFloat(completedOrder?.total || 0) || 0;
-  const previewPaidAmount = parseFloat(completedOrder?.amountPaid ?? amountPaid ?? 0) || 0;
-  const dialogChange = previewPaidAmount - dialogTotal;
   const isGlobalDiscountActive = !!globalDiscountSettings?.is_global_discount_active;
 
   const getStoreInfo = () => ({
@@ -198,13 +192,13 @@ const OrderSummary = ({ view = 'full' }) => {
   }, [currentOrder.isReturnOrder, currentOrder.discount, globalDiscountSettings, currentOrder.items.length, currentOrder.subtotal, discountType, discountValue, dispatch]);
 
   useEffect(() => {
-    if (!paymentDialog && currentOrder.items.length === 0 && !hasReturnItems && !currentOrder.id) {
+    if (currentOrder.items.length === 0 && !hasReturnItems && !currentOrder.id) {
       setDiscountType('fixed');
       setDiscountValue('');
       setAmountPaid('');
       setPaymentMethod('cash');
     }
-  }, [currentOrder.items.length, currentOrder.id, hasReturnItems, paymentDialog]);
+  }, [currentOrder.items.length, currentOrder.id, hasReturnItems]);
 
   useEffect(() => {
     if (currentOrder.paymentMethod) {
@@ -292,8 +286,6 @@ const OrderSummary = ({ view = 'full' }) => {
     setPaymentMethod('cash');
     setEditDiscountItem(null);
     setEditDiscountValue('');
-    setCompletedOrder(null);
-    setPreviewHtml('');
   };
 
   const refreshCashOnHand = async () => {
@@ -449,22 +441,7 @@ const OrderSummary = ({ view = 'full' }) => {
       dispatch(fetchActiveOrders());
       await refreshCashOnHand();
 
-      setCompletedOrder({
-        ...currentOrder,
-        id: result.id,
-        barcode: result.barcode || currentOrder.barcode || null,
-        total: currentOrder.total,
-        discount_type: currentOrder.isReturnOrder ? null : effectiveOrderDiscount.discountType,
-        discount_value: currentOrder.isReturnOrder ? 0 : effectiveOrderDiscount.discountValue,
-        paymentMethod: effectivePaymentMethod,
-        amountPaid: effectivePaymentMethod === 'cash' ? tenderCash : currentOrder.total,
-        tender_cash: tenderCash,
-        is_card_payment: effectivePaymentMethod === 'card',
-        cashier: user?.name || 'System',
-        is_return: currentOrder.isReturnOrder,
-      });
-
-      const orderForPreview = {
+      const orderDataForPrint = {
         ...currentOrder,
         id: result.id,
         barcode: result.barcode || currentOrder.barcode || null,
@@ -479,14 +456,21 @@ const OrderSummary = ({ view = 'full' }) => {
         is_return: currentOrder.isReturnOrder,
       };
 
-      setPreviewHtml(htmlPrintService.getReceiptHTML(orderForPreview, getStoreInfo()));
+      const storeInfo = getStoreInfo();
+      const billResult = await htmlPrintService.printBillPreview(orderDataForPrint, storeInfo);
+
+      if (billResult.success) {
+        toast.success('Bill preview opened successfully!');
+      } else {
+        toast.error(billResult.message || 'Failed to open bill preview.');
+      }
 
       if (!requiresCashTender) {
         setAmountPaid('0');
       }
 
       dispatch(clearCurrentOrder());
-      setPaymentDialog(true);
+      resetOrderUiState();
     } catch (error) {
       toast.error(`Failed to complete order: ${error.message}`);
     }
@@ -533,51 +517,7 @@ const OrderSummary = ({ view = 'full' }) => {
     }
   };
 
-  const handlePaymentConfirm = async () => {
-    try {
-      const storeInfo = getStoreInfo();
 
-      const orderData = completedOrder || {
-        ...currentOrder,
-        id: Date.now(),
-        paymentMethod,
-        amountPaid: parseFloat(amountPaid) || currentOrder.total,
-        cashier: user?.name || 'System',
-        tender_cash: parseFloat(amountPaid) || currentOrder.total,
-      };
-
-      const preferredPrinterName = 'POS80 Printer';
-      const savedPrinter = localStorage.getItem('selectedPrinter');
-      const printerToUse = savedPrinter || preferredPrinterName;
-      if (!savedPrinter) {
-        localStorage.setItem('selectedPrinter', preferredPrinterName);
-      }
-      let billResult;
-
-      if (htmlPrintService.canDirectPrint()) {
-        billResult = await htmlPrintService.printDirectThermal(orderData, storeInfo);
-      } else {
-        billResult = await htmlPrintService.printBillHTML(orderData, storeInfo);
-      }
-
-      if (billResult.success) {
-        toast.success('Bill printed successfully!');
-        dispatch(clearCurrentOrder());
-        dispatch(fetchActiveOrders());
-        setPaymentDialog(false);
-        resetOrderUiState();
-      } else {
-        toast.error(billResult.message || billResult.error || `Printer not connected. Check ${printerToUse}.`);
-      }
-    } catch (error) {
-      toast.error(`Failed to print bill: ${error.message}`);
-    }
-  };
-
-  const handleClosePreview = () => {
-    setPaymentDialog(false);
-    resetOrderUiState();
-  };
 
   const returnCreditLines = useMemo(() => {
     return (currentOrder.returnedItems || []).map((item, index) => {
@@ -1264,157 +1204,7 @@ const OrderSummary = ({ view = 'full' }) => {
         />
       )}
 
-      {showTotalsSection && (
-      <Dialog
-        open={paymentDialog}
-        onClose={handleClosePreview}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            handlePaymentConfirm();
-          }
-        }}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle sx={{ position: 'relative', pr: 12 }}>
-          Bill Preview
-          <Button
-            size="small"
-            variant="outlined"
-            color="inherit"
-            onClick={handleClosePreview}
-            sx={{ position: 'absolute', right: 16, top: 12 }}
-          >
-            Cancel
-          </Button>
-        </DialogTitle>
-        <DialogContent>
-          <Alert severity="success" sx={{ mb: 2 }}>
-            {completedOrder?.is_return ? 'Return order placed successfully!' : 'Order placed successfully!'}
-          </Alert>
 
-          <Typography variant="body2" sx={{ mb: 1 }}>
-            Order #{completedOrder?.id || '-'}
-          </Typography>
-          {completedOrder?.barcode && (
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              Barcode: {completedOrder.barcode}
-            </Typography>
-          )}
-          <Typography variant="body2">
-            Total: {formatPrice(dialogTotal)}
-          </Typography>
-
-          <Box
-            sx={{
-              mt: 1.5,
-              p: 1.5,
-              width: '100%',
-              maxWidth: 420,
-              mx: 'auto',
-              borderRadius: 2,
-              background: '#f8f9fb',
-              border: '1px solid #d7dde6',
-            }}
-          >
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                p: 1,
-                borderRadius: 1,
-                bgcolor: '#eceff3',
-                color: '#1f2937',
-                mb: 1,
-              }}
-            >
-              <Typography variant="body2" fontWeight={700}>Total</Typography>
-              <Typography variant="body1" fontWeight={800}>Rs {dialogTotal.toFixed(2)}</Typography>
-            </Box>
-
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                p: 1,
-                borderRadius: 1,
-                bgcolor: '#eceff3',
-                color: '#1f2937',
-                mb: 1,
-              }}
-            >
-              <Typography variant="body2" fontWeight={700}>Paid</Typography>
-              <Typography variant="body1" fontWeight={800}>Rs {previewPaidAmount.toFixed(2)}</Typography>
-            </Box>
-
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                p: 1,
-                borderRadius: 1,
-                bgcolor: dialogChange >= 0 ? '#2e7d32' : '#c62828',
-                color: '#fff',
-              }}
-            >
-              <Typography variant="body2" fontWeight={700}>Change</Typography>
-              <Typography variant="body1" fontWeight={800}>Rs {dialogChange.toFixed(2)}</Typography>
-            </Box>
-
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                p: 1,
-                borderRadius: 1,
-                bgcolor: '#eceff3',
-                color: '#1f2937',
-                mt: 1,
-              }}
-            >
-              <Typography variant="body2" fontWeight={700}>Payment Type</Typography>
-              <Typography variant="body1" fontWeight={800} sx={{ textTransform: 'capitalize' }}>
-                {completedOrder?.paymentMethod || paymentMethod || 'cash'}
-              </Typography>
-            </Box>
-          </Box>
-
-          <Box
-            sx={{
-              mt: 2,
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
-              overflow: 'hidden',
-              height: 430,
-              bgcolor: '#fff',
-            }}
-          >
-            <iframe
-              title="Bill Preview"
-              srcDoc={previewHtml}
-              style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClosePreview}>Cancel</Button>
-          <Button
-            onClick={handlePaymentConfirm}
-            variant="contained"
-            startIcon={<Receipt />}
-            autoFocus
-          >
-            Print
-          </Button>
-        </DialogActions>
-      </Dialog>
-      )}
     </>
   );
 };
