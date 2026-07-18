@@ -172,7 +172,7 @@ const POSInterface = () => {
     if (!barcode) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/item-variants/barcode/${encodeURIComponent(barcode)}`);
+      const response = await fetch(`http://localhost:3002/api/item-variants/barcode/${encodeURIComponent(barcode)}`);
 
       if (!response.ok) {
         setFailedBarcode(barcode);
@@ -252,7 +252,7 @@ const POSInterface = () => {
   const handleAddToOrder = useCallback(async (itemVariant) => {
     try {
       // Fetch fresh batch data for this item variant
-      const response = await fetch(`http://localhost:3001/api/item-variants/${itemVariant.id}`);
+      const response = await fetch(`http://localhost:3002/api/item-variants/${itemVariant.id}`);
       if (!response.ok) {
         // Fallback: add directly with existing price
         addItemWithPrice(itemVariant, parseFloat(itemVariant.selling_price), null);
@@ -525,7 +525,7 @@ const POSInterface = () => {
                         <CardMedia
                           component="img"
                           loading="lazy"
-                          image={item.image.startsWith('data:image') ? item.image : `http://localhost:3001/uploads/${item.image.replace(/\\/g, '/').split('/').pop()}`}
+                          image={item.image.startsWith('data:image') ? item.image : `http://localhost:3002/uploads/${item.image.replace(/\\/g, '/').split('/').pop()}`}
                           alt={item.item_name}
                           sx={{
                             width: 94,

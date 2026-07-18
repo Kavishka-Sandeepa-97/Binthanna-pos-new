@@ -94,7 +94,7 @@ const OrderHistoryDialog = ({ open, onClose }) => {
       if (statusFilter) params.append('status', statusFilter);
       if (productSearch) params.append('item_search', productSearch);
 
-      const response = await fetch(`http://localhost:3001/api/orders?${params}`);
+      const response = await fetch(`http://localhost:3002/api/orders?${params}`);
       const data = await response.json();
 
       setOrders(data.orders || []);
@@ -110,7 +110,7 @@ const OrderHistoryDialog = ({ open, onClose }) => {
 
   const handleRowClick = async (order, isEdit = false) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/orders/${order.id}`);
+      const response = await fetch(`http://localhost:3002/api/orders/${order.id}`);
       const fullOrder = await response.json();
       setSelectedOrder(fullOrder);
       setEditedItems(fullOrder.items || []);
@@ -126,7 +126,7 @@ const OrderHistoryDialog = ({ open, onClose }) => {
     e.stopPropagation();
     try {
       // Fetch full order details
-      const response = await fetch(`http://localhost:3001/api/orders/${order.id}`);
+      const response = await fetch(`http://localhost:3002/api/orders/${order.id}`);
       const fullOrder = await response.json();
       
       // Load order into Redux state
@@ -178,7 +178,7 @@ const OrderHistoryDialog = ({ open, onClose }) => {
 
     setCancellingOrderId(order.id);
     try {
-      const response = await fetch(`http://localhost:3001/api/orders/${order.id}/status`, {
+      const response = await fetch(`http://localhost:3002/api/orders/${order.id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'cancelled' }),
@@ -235,7 +235,7 @@ const OrderHistoryDialog = ({ open, onClose }) => {
       }, 0);
 
       // Update order
-      const response = await fetch(`http://localhost:3001/api/orders/${selectedOrder.id}`, {
+      const response = await fetch(`http://localhost:3002/api/orders/${selectedOrder.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

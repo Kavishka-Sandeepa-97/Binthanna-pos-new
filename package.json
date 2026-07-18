@@ -1,5 +1,5 @@
 {
-  "name": "binthanna-pos",
+  "name": "binthanna-pos-new",
   "version": "1.0.0",
   "main": "main/main.js",
   "scripts": {
@@ -28,8 +28,8 @@
     "electron-builder": "^24.9.1"
   },
   "build": {
-    "appId": "com.binthanna.pos",
-    "productName": "Binthanna Restaurant POS",
+    "appId": "com.binthanna.pos.new",
+    "productName": "Binthanna POS New",
     "files": [
       "main/**/*",
       "render/dist/**/*"
@@ -60,7 +60,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Binthanna Restaurant POS"
+      "shortcutName": "Binthanna POS New"
     },
     "asarUnpack": [
       "**/node_modules/sqlite3/**/*"

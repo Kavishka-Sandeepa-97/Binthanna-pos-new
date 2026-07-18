@@ -49,7 +49,7 @@ const ActiveOrdersDialog = ({ open, onClose }) => {
   const handleLoadOrder = async (order) => {
     // Fetch full order details with items
     try {
-      const response = await fetch(`http://localhost:3001/api/orders/${order.id}`);
+      const response = await fetch(`http://localhost:3002/api/orders/${order.id}`);
       const fullOrder = await response.json();
       dispatch(loadActiveOrder(fullOrder));
       // Refresh active orders after loading

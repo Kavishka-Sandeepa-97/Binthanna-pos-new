@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3001';
+const API_BASE = 'http://localhost:3002';
 
 export const getProducts = async () => {
   const response = await fetch(`${API_BASE}/api/products`);

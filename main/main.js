@@ -292,8 +292,8 @@ function createWindow() {
   startSyncScheduler();
 
   // Start Express server
-  server = expressServer.listen(3001, () => {
-    console.log('Express server running on port 3001');
+  server = expressServer.listen(3002, () => {
+    console.log('Express server running on port 3002');
   });
 
   // Set server timeout to prevent hanging connections
@@ -342,7 +342,7 @@ function createWindow() {
     if (isDev) {
       console.log('🚀 Development mode: Loading from Vite dev server');
       console.log('📱 Frontend: http://localhost:5173');
-      console.log('🔧 Backend API: http://localhost:3001');
+      console.log('🔧 Backend API: http://localhost:3002');
     }
   });
 
