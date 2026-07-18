@@ -30,6 +30,26 @@ const getReceiptFontSettings = () => {
   return { fontFamily, fontWeight, fontSize };
 };
 
+const normalizeReceiptPrinterName = (printerName) => {
+  const value = (printerName || '').toString().trim();
+
+  if (['XP-80C (copy 2)', 'XP-80C (copy 4)'].includes(value)) {
+    return 'POS80 Printer';
+  }
+
+  return value;
+};
+
+const normalizeBarcodePrinterName = (printerName) => {
+  const value = (printerName || '').toString().trim();
+
+  if (['XP-H500B', 'Xprinter XP-H500B'].includes(value)) {
+    return 'Xprinter XP-H500B';
+  }
+
+  return value;
+};
+
 const generateBarcodeSvgMarkup = (barcodeValue) => {
   if (!barcodeValue || typeof document === 'undefined') {
     return '';
@@ -267,11 +287,11 @@ const htmlPrintService = {
     }
   },
 
-  // Direct thermal printer printing (for XP-80C and similar thermal printers)
+  // Direct thermal printer printing (for POS80 and similar receipt printers)
   printDirectThermal: async (order = {}, storeInfo = {}) => {
     try {
       const ipcRenderer = getIpcRenderer();
-      const savedPrinter = localStorage.getItem('selectedPrinter');
+      const savedPrinter = normalizeReceiptPrinterName(localStorage.getItem('selectedPrinter'));
       
       if (!ipcRenderer) {
         return { success: false, message: 'Direct printing only available in desktop app' };
@@ -306,9 +326,9 @@ const htmlPrintService = {
       const shopName = 'BINTHANNA RESTAURANT';
       
       // Persist a default barcode printer when user has not configured one yet
-      const configuredBarcodePrinter = localStorage.getItem('barcodePrinter');
+      const configuredBarcodePrinter = normalizeBarcodePrinterName(localStorage.getItem('barcodePrinter'));
       const defaultBarcodePrinter = 'Xprinter XP-H500B';
-      const labelPrinter = printerName || configuredBarcodePrinter || defaultBarcodePrinter;
+      const labelPrinter = normalizeBarcodePrinterName(printerName) || configuredBarcodePrinter || defaultBarcodePrinter;
       if (!configuredBarcodePrinter) {
         localStorage.setItem('barcodePrinter', defaultBarcodePrinter);
       }

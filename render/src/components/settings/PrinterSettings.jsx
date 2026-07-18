@@ -19,11 +19,18 @@ import htmlPrintService from '../../services/htmlPrintService';
 import { toast } from 'react-toastify';
 
 const PrinterSettings = () => {
-  const quickReceiptPrinters = ['XP-80C (copy 2)', 'XP-80C (copy 4)'];
+  const quickReceiptPrinters = ['POS80 Printer'];
+  const preferredReceiptPrinterName = 'POS80 Printer';
+  const legacyReceiptPrinters = ['XP-80C (copy 2)', 'XP-80C (copy 4)'];
+  const preferredBarcodePrinterName = 'Xprinter XP-H500B';
   const [printers, setPrinters] = useState([]);
   const [selectedPrinter, setSelectedPrinter] = useState(() => {
     // Load saved printer from localStorage
     const saved = localStorage.getItem('selectedPrinter');
+    return saved || '';
+  });
+  const [barcodePrinter, setBarcodePrinter] = useState(() => {
+    const saved = localStorage.getItem('barcodePrinter');
     return saved || '';
   });
   const [loading, setLoading] = useState(false);
@@ -80,17 +87,29 @@ const PrinterSettings = () => {
       // Check if we have a saved printer that still exists
       const savedPrinter = localStorage.getItem('selectedPrinter');
       const savedExists = savedPrinter && availablePrinters.find(p => p.name === savedPrinter);
+      const savedBarcodePrinter = localStorage.getItem('barcodePrinter');
+      const savedBarcodeExists = savedBarcodePrinter && availablePrinters.find(p => p.name === savedBarcodePrinter);
       
       if (savedExists) {
         setSelectedPrinter(savedPrinter);
       } else if (availablePrinters.length > 0) {
-        const preferredPrinterName = 'XP-80C (copy 2)';
-        const preferred = availablePrinters.find((printer) => printer.name === preferredPrinterName);
-        const fallback = preferred ? preferred.name : availablePrinters[0].name;
+        const preferred = availablePrinters.find((printer) => printer.name === preferredReceiptPrinterName);
+        const legacyMatch = availablePrinters.find((printer) => legacyReceiptPrinters.includes(printer.name));
+        const fallback = preferred ? preferred.name : (legacyMatch ? legacyMatch.name : availablePrinters[0].name);
 
-        // Auto-select preferred thermal printer when available.
+        // Auto-select the receipt printer when available.
         setSelectedPrinter(fallback);
         localStorage.setItem('selectedPrinter', fallback);
+      }
+
+      if (savedBarcodeExists) {
+        setBarcodePrinter(savedBarcodePrinter);
+      } else if (availablePrinters.length > 0) {
+        const preferredBarcode = availablePrinters.find((printer) => printer.name === preferredBarcodePrinterName);
+        const barcodeFallback = preferredBarcode ? preferredBarcode.name : availablePrinters[0].name;
+
+        setBarcodePrinter(barcodeFallback);
+        localStorage.setItem('barcodePrinter', barcodeFallback);
       }
     } catch (error) {
       console.error('Error loading printers:', error);
@@ -121,6 +140,13 @@ const PrinterSettings = () => {
     } else {
       toast.warning(`Saved ${printerName}. If it does not print, click Refresh Printers.`);
     }
+  };
+
+  const handleBarcodePrinterChange = (event) => {
+    const newPrinter = event.target.value;
+    setBarcodePrinter(newPrinter);
+    localStorage.setItem('barcodePrinter', newPrinter);
+    toast.success(`Barcode printer set to: ${newPrinter}`);
   };
 
   const handleFontChange = (event) => {
@@ -218,7 +244,7 @@ const PrinterSettings = () => {
 
             <Box sx={{ mb: 2 }}>
               <Typography variant="body2" sx={{ mb: 1, fontWeight: 700 }}>
-                Quick Switch (XP-80C)
+                Quick Switch (Receipt Printer)
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 {quickReceiptPrinters.map((printerName) => {
@@ -260,6 +286,44 @@ const PrinterSettings = () => {
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   This printer will be used for all receipt printing
+                </Typography>
+              </Alert>
+            )}
+
+            <Divider sx={{ my: 2 }} />
+
+            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 700 }}>
+              Barcode Printer
+            </Typography>
+
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>Select Barcode Printer</InputLabel>
+              <Select
+                value={barcodePrinter}
+                onChange={handleBarcodePrinterChange}
+                label="Select Barcode Printer"
+                disabled={!getIpcRenderer()}
+              >
+                {printers.length === 0 ? (
+                  <MenuItem value="">No printers found</MenuItem>
+                ) : (
+                  printers.map((printer) => (
+                    <MenuItem key={printer.name} value={printer.name}>
+                      {printer.displayName || printer.name}
+                      {printer.isDefault && ' (Default)'}
+                    </MenuItem>
+                  ))
+                )}
+              </Select>
+            </FormControl>
+
+            {barcodePrinter && (
+              <Alert severity="info" icon={<Print />} sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  <strong>Barcode Printer:</strong> {barcodePrinter}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  This printer will be used for barcode labels
                 </Typography>
               </Alert>
             )}

@@ -546,7 +546,7 @@ const OrderSummary = ({ view = 'full' }) => {
         tender_cash: parseFloat(amountPaid) || currentOrder.total,
       };
 
-      const preferredPrinterName = 'XP-80C (copy 2)';
+      const preferredPrinterName = 'POS80 Printer';
       const savedPrinter = localStorage.getItem('selectedPrinter');
       const printerToUse = savedPrinter || preferredPrinterName;
       if (!savedPrinter) {

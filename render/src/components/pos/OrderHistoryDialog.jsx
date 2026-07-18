@@ -290,7 +290,7 @@ const OrderHistoryDialog = ({ open, onClose }) => {
       };
 
       // Use the same printer selection path as Place Order printing.
-      const preferredPrinterName = 'XP-80C (copy 2)';
+      const preferredPrinterName = 'POS80 Printer';
       const savedPrinter = localStorage.getItem('selectedPrinter');
       if (!savedPrinter) {
         localStorage.setItem('selectedPrinter', preferredPrinterName);
