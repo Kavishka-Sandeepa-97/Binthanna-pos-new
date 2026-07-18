@@ -50,6 +50,22 @@ const normalizeBarcodePrinterName = (printerName) => {
   return value;
 };
 
+const normalizeCategoryName = (value) => (value || '').toString().trim().toLowerCase();
+
+const isCategoryMatch = (item = {}, targetCategory = '') => {
+  const category = normalizeCategoryName(item.category || item.category_name);
+  const parentCategory = normalizeCategoryName(item.parent_category || item.parent_category_name);
+  const target = normalizeCategoryName(targetCategory);
+
+  return category === target || parentCategory === target;
+};
+
+const isBarTicketItem = (item = {}) => {
+  return isCategoryMatch(item, 'bar');
+};
+
+const isKitchenTicketItem = (item = {}) => isCategoryMatch(item, 'food');
+
 const generateBarcodeSvgMarkup = (barcodeValue) => {
   if (!barcodeValue || typeof document === 'undefined') {
     return '';
@@ -72,8 +88,12 @@ const generateBarcodeSvgMarkup = (barcodeValue) => {
 };
 
 // Build receipt HTML used by both browser and thermal printing
-const buildReceiptHTML = (order = {}, storeInfo = {}) => {
+const buildReceiptHTML = (order = {}, storeInfo = {}, options = {}) => {
   const { id, barcode, items = [], cashier, paymentMethod, amountPaid, tender_cash, discount_type, discount_value, additional_charges } = order;
+  const ticketTitle = options.ticketTitle || '';
+  const showPayment = options.showPayment !== false;
+  const slimTicket = options.slimTicket === true;
+  const receiptItems = Array.isArray(options.items) ? options.items : items;
   const { fontFamily, fontWeight, fontSize } = getReceiptFontSettings();
   const orderBarcodeSvg = generateBarcodeSvgMarkup(barcode);
 
@@ -81,7 +101,7 @@ const buildReceiptHTML = (order = {}, storeInfo = {}) => {
   let subtotal = 0;
   let originalSubtotal = 0;
   let totalItemDiscounts = 0;
-  items.forEach((it) => {
+  receiptItems.forEach((it) => {
     const qty = parseFloat(it.quantity || it.qty || 0) || 0;
     const price = parseFloat(it.price || it.unit_price || 0) || 0;
     const origPrice = parseFloat(it.original_price || it.originalPrice || 0) || price;
@@ -119,6 +139,7 @@ const buildReceiptHTML = (order = {}, storeInfo = {}) => {
         -webkit-print-color-adjust: exact;
       }
       .receipt { width: 276px; padding: 4px; }
+      .receipt.slim-ticket { width: 276px; padding: 6px 4px 4px; }
       .center { text-align: center; }
       .right { text-align: right; }
       h2 { margin: 2px 0; font-size: 16px; font-weight: 900; letter-spacing: 0.4px; }
@@ -127,6 +148,9 @@ const buildReceiptHTML = (order = {}, storeInfo = {}) => {
       .items-table col.item-col { width: 62%; }
       .items-table col.qty-col { width: 15%; }
       .items-table col.total-col { width: 23%; }
+      .slim-ticket .items-table col.item-col { width: 60%; }
+      .slim-ticket .items-table col.qty-col { width: 14%; }
+      .slim-ticket .items-table col.total-col { width: 26%; }
       .items-table thead th { font-size: 12px; font-weight: 900; padding-bottom: 2px; }
       .items td { padding: 2px 1px; word-wrap: break-word; white-space: normal; font-size: 12px; }
       .items td:first-child { word-break: break-word; }
@@ -140,13 +164,14 @@ const buildReceiptHTML = (order = {}, storeInfo = {}) => {
       .total-row td { font-size: 12px; font-weight: 900; white-space: nowrap; }
       .change-row { font-size: 12px; font-weight: 900; }
       .receipt-footer { text-align: center; margin-top: 8px; }
+      .ticket-title { margin: 2px 0 4px; font-size: 13px; font-weight: 900; letter-spacing: 0.8px; }
       .order-barcode { text-align: center; margin-top: 6px; }
       .order-barcode svg { display: block; margin: 0 auto; max-width: 150px; height: 18px; }
       .order-barcode-number { margin-top: 1px; font-size: 9px; letter-spacing: 0.8px; }
     </style>
   `;
 
-  const itemsHtml = items.map(it => {
+  const itemsHtml = receiptItems.map(it => {
     const itemName = (it.item_name || it.itemName || 'Item').toString();
     const variantName = (it.variant_name || it.variantName || '').toString();
     const displayName = variantName ? `${itemName} (${variantName})` : `${itemName}`;
@@ -159,6 +184,10 @@ const buildReceiptHTML = (order = {}, storeInfo = {}) => {
     const discVal = parseFloat(it.item_discount_value || it.discount_value || it.discountValue || 0) || 0;
     const discountPerUnit = discAmtRaw > 0 ? discAmtRaw : Math.max(0, origPrice - price);
     const hasDiscount = discountPerUnit > 0;
+
+    if (slimTicket) {
+      return `<tr class="items"><td>${displayName}</td><td>${qty}</td><td class="right">${currency} ${price.toFixed(2)}</td></tr>`;
+    }
 
     let row = `<tr class="items"><td>${displayName}</td><td>${qty}</td><td class="right">${lineTotal}</td></tr>`;
 
@@ -175,6 +204,48 @@ const buildReceiptHTML = (order = {}, storeInfo = {}) => {
     return row;
   }).join('');
 
+  const summarySection = slimTicket ? `
+          <div class="sep"></div>
+
+          <div class="receipt-footer">
+            ${barcode ? `
+              <div class="order-barcode">
+                ${orderBarcodeSvg}
+                <div class="order-barcode-number">${barcode}</div>
+              </div>
+            ` : ''}
+          </div>
+  ` : `
+          <div class="sep"></div>
+
+          <table>
+            <tr class="subtotal-row"><td>Subtotal (before discount)</td><td class="right">${currency} ${totalItemDiscounts > 0 ? originalSubtotal.toFixed(2) : subtotal.toFixed(2)}</td></tr>
+            ${totalItemDiscounts > 0 ? `<tr class="discount-summary-row"><td>Item Discounts</td><td class="right">- <span class="discount-highlight">${currency} ${totalItemDiscounts.toFixed(2)}</span></td></tr>` : ''}
+            ${discountAmount > 0 ? `<tr class="discount-summary-row"><td>Discount${discount_type === 'percent' ? ` (${discount_value}%)` : ''}</td><td class="right">- <span class="discount-highlight">${currency} ${discountAmount.toFixed(2)}</span></td></tr>` : ''}
+            ${additionalCharges > 0 ? `<tr><td>Additional Charge</td><td class="right">${currency} ${additionalCharges.toFixed(2)}</td></tr>` : ''}
+            <tr class="total-row"><td>TOTAL</td><td class="right">${currency} ${total.toFixed(2)}</td></tr>
+          </table>
+
+          <div class="sep"></div>
+
+          ${showPayment ? `
+          <div>Payment: ${paymentMethod || 'cash'}</div>
+          <div>Paid: ${currency} ${paid.toFixed(2)}</div>
+          ${paid > 0 ? `<div class="change-row">Change: ${currency} ${change >= 0 ? change.toFixed(2) : '0.00'}</div>` : ''}
+          ` : ''}
+
+          <div class="receipt-footer">
+            <div class="small">No cash refund</div>
+            <div class="small">${storeInfo.receiptFooter || 'Thank you for your visit !'}</div>
+            ${barcode ? `
+              <div class="order-barcode">
+                ${orderBarcodeSvg}
+                <div class="order-barcode-number">${barcode}</div>
+              </div>
+            ` : ''}
+          </div>
+  `;
+
   return `
     <html>
       <head>
@@ -183,11 +254,12 @@ const buildReceiptHTML = (order = {}, storeInfo = {}) => {
         ${styles}
       </head>
       <body>
-        <div class="receipt">
+        <div class="receipt${slimTicket ? ' slim-ticket' : ''}">
           <div class="center">
             <h2>${storeInfo.name || 'STORE'}</h2>
             <div class="small">${storeInfo.address || ''}</div>
             <div class="small">${storeInfo.phone || ''}</div>
+            ${ticketTitle ? `<div class="ticket-title">${ticketTitle}</div>` : ''}
           </div>
 
           <div class="sep"></div>
@@ -214,36 +286,95 @@ const buildReceiptHTML = (order = {}, storeInfo = {}) => {
             </tbody>
           </table>
 
-          <div class="sep"></div>
-
-          <table>
-            <tr class="subtotal-row"><td>Subtotal (before discount)</td><td class="right">${currency} ${totalItemDiscounts > 0 ? originalSubtotal.toFixed(2) : subtotal.toFixed(2)}</td></tr>
-            ${totalItemDiscounts > 0 ? `<tr class="discount-summary-row"><td>Item Discounts</td><td class="right">- <span class="discount-highlight">${currency} ${totalItemDiscounts.toFixed(2)}</span></td></tr>` : ''}
-            ${discountAmount > 0 ? `<tr class="discount-summary-row"><td>Discount${discount_type === 'percent' ? ` (${discount_value}%)` : ''}</td><td class="right">- <span class="discount-highlight">${currency} ${discountAmount.toFixed(2)}</span></td></tr>` : ''}
-            ${additionalCharges > 0 ? `<tr><td>Additional Charge</td><td class="right">${currency} ${additionalCharges.toFixed(2)}</td></tr>` : ''}
-            <tr class="total-row"><td>TOTAL</td><td class="right">${currency} ${total.toFixed(2)}</td></tr>
-          </table>
-
-          <div class="sep"></div>
-
-          <div>Payment: ${paymentMethod || 'cash'}</div>
-          <div>Paid: ${currency} ${paid.toFixed(2)}</div>
-          ${paid > 0 ? `<div class="change-row">Change: ${currency} ${change >= 0 ? change.toFixed(2) : '0.00'}</div>` : ''}
-
-          <div class="receipt-footer">
-            <div class="small">No cash refund</div>
-            <div class="small">${storeInfo.receiptFooter || 'Thank you for your visit !'}</div>
-            ${barcode ? `
-              <div class="order-barcode">
-                ${orderBarcodeSvg}
-                <div class="order-barcode-number">${barcode}</div>
-              </div>
-            ` : ''}
-          </div>
+          ${summarySection}
         </div>
       </body>
     </html>
   `;
+};
+
+const openPrintWindow = (html, windowFeatures) => {
+  const printWindow = window.open('', '_blank', windowFeatures);
+  if (!printWindow) {
+    return { success: false, message: 'Unable to open print window (pop-up blocked).' };
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+
+  setTimeout(() => {
+    try {
+      printWindow.print();
+      printWindow.close();
+    } catch (_error) {}
+  }, 300);
+
+  return { success: true };
+};
+
+const injectPreviewControls = (html, title = 'Print Preview') => {
+  const previewControls = `
+    <style>
+      .preview-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 9999;
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        align-items: center;
+        padding: 10px;
+        background: #111;
+        color: #fff;
+        border-bottom: 1px solid #333;
+      }
+      .preview-toolbar button {
+        appearance: none;
+        border: 0;
+        border-radius: 6px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .preview-print-btn {
+        background: #f5c542;
+        color: #111;
+      }
+      .preview-close-btn {
+        background: #444;
+        color: #fff;
+      }
+      @media print {
+        .preview-toolbar {
+          display: none !important;
+        }
+      }
+    </style>
+    <div class="preview-toolbar">
+      <span>${title}</span>
+      <button type="button" class="preview-print-btn" onclick="window.print()">Print</button>
+      <button type="button" class="preview-close-btn" onclick="window.close()">Close</button>
+    </div>
+  `;
+
+  if (html.includes('<body>')) {
+    return html.replace('<body>', `<body>${previewControls}`);
+  }
+
+  return `${html}${previewControls}`;
+};
+
+const openPreviewWindow = (html, windowFeatures, title) => {
+  const previewHtml = injectPreviewControls(html, title);
+  return openPrintWindow(previewHtml, windowFeatures);
+};
+
+const openReceiptPreviewWindow = (html, windowFeatures, title) => {
+  const previewHtml = injectPreviewControls(html, title);
+  return openPrintWindow(previewHtml, windowFeatures);
 };
 
 const htmlPrintService = {
@@ -255,40 +386,26 @@ const htmlPrintService = {
     return buildReceiptHTML(order, storeInfo);
   },
 
-  printBillHTML: async (order = {}, storeInfo = {}) => {
+  printBillHTML: async (order = {}, storeInfo = {}, options = {}) => {
     try {
-      const html = buildReceiptHTML(order, storeInfo);
+      const html = buildReceiptHTML(order, storeInfo, options);
+      return openPrintWindow(html, 'width=360,height=600');
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
 
-      // Open a new window and print
-      const printWindow = window.open('', '_blank', 'width=360,height=600');
-      if (!printWindow) {
-        return { success: false, message: 'Unable to open print window (pop-up blocked).' };
-      }
-
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-
-      // Give the new window a small moment to render before calling print
-      setTimeout(() => {
-        try {
-          printWindow.print();
-          // close after printing
-          printWindow.close();
-        } catch (e) {
-          // ignore print errors
-        }
-      }, 300);
-
-      return { success: true };
+  printBillPreview: async (order = {}, storeInfo = {}, options = {}) => {
+    try {
+      const html = buildReceiptHTML(order, storeInfo, options);
+      return openReceiptPreviewWindow(html, 'width=360,height=600', 'Bill Preview');
     } catch (error) {
       return { success: false, message: error.message };
     }
   },
 
   // Direct thermal printer printing (for POS80 and similar receipt printers)
-  printDirectThermal: async (order = {}, storeInfo = {}) => {
+  printDirectThermal: async (order = {}, storeInfo = {}, options = {}) => {
     try {
       const ipcRenderer = getIpcRenderer();
       const savedPrinter = normalizeReceiptPrinterName(localStorage.getItem('selectedPrinter'));
@@ -301,7 +418,7 @@ const htmlPrintService = {
         return { success: false, message: 'No printer selected. Please go to Settings > Printer Settings' };
       }
 
-      const html = buildReceiptHTML(order, storeInfo);
+      const html = buildReceiptHTML(order, storeInfo, options);
 
       // Send HTML to thermal printer via Electron silent print
       const result = await ipcRenderer.invoke('print-receipt', {
@@ -310,6 +427,40 @@ const htmlPrintService = {
       });
 
       return result;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  printBarTicket: async (order = {}, storeInfo = {}) => {
+    try {
+      const barItems = (order.items || []).filter(isBarTicketItem);
+
+      if (barItems.length === 0) {
+        return { success: false, message: 'No bar items found in this order' };
+      }
+
+      const ticketOrder = { ...order, items: barItems };
+      const options = { ticketTitle: 'BAR ORDER TICKET', showPayment: false, slimTicket: true };
+      const html = buildReceiptHTML(ticketOrder, storeInfo, options);
+      return openPreviewWindow(html, 'width=360,height=600', 'Bar Order Ticket Preview');
+    } catch (error) {
+      return { success: false, message: error.message }; 
+    }
+  },
+
+  printKitchenTicket: async (order = {}, storeInfo = {}) => {
+    try {
+      const kitchenItems = (order.items || []).filter(isKitchenTicketItem);
+
+      if (kitchenItems.length === 0) {
+        return { success: false, message: 'No kitchen items found in this order' };
+      }
+
+      const ticketOrder = { ...order, items: kitchenItems };
+      const options = { ticketTitle: 'KITCHEN ORDER TICKET', showPayment: false, slimTicket: true };
+      const html = buildReceiptHTML(ticketOrder, storeInfo, options);
+      return openPreviewWindow(html, 'width=360,height=600', 'Kitchen Order Ticket Preview');
     } catch (error) {
       return { success: false, message: error.message };
     }

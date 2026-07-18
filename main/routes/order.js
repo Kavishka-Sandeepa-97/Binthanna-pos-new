@@ -744,7 +744,8 @@ router.get('/:id', (req, res) => {
 
     if (order) {
       const items = db.prepare(`
-        SELECT ivo.*, iv.barcode, i.name as item_name, v.variant_name, c.name as category,
+         SELECT ivo.*, iv.barcode, i.name as item_name, v.variant_name, c.name as category,
+           pc.name as parent_category,
                ivo.discount_source, ivo.discount_type as item_discount_type,
                ivo.discount_value as item_discount_value, ivo.discount_amount as item_discount_amount,
                ivo.original_price
@@ -753,6 +754,7 @@ router.get('/:id', (req, res) => {
         JOIN item i ON iv.item_id = i.id
         JOIN variant v ON iv.variant_id = v.id
         JOIN category c ON i.category_id = c.id
+         LEFT JOIN category pc ON c.parent_id = pc.id
         WHERE ivo.order_id = ?
       `).all(id);
 

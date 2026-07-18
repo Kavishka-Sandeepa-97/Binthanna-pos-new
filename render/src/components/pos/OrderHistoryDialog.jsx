@@ -267,6 +267,42 @@ const OrderHistoryDialog = ({ open, onClose }) => {
     }
   };
 
+  const handlePrintTicket = async (ticketType) => {
+    if (!selectedOrder) return;
+
+    try {
+      const orderData = {
+        ...selectedOrder,
+        items: selectedOrder.items || [],
+        cashier: selectedOrder.staff_name || 'System',
+        paymentMethod: selectedOrder.is_card_payment ? 'card' : 'cash',
+        amountPaid: selectedOrder.is_card_payment
+          ? parseFloat(selectedOrder.total_amount || 0)
+          : parseFloat(selectedOrder.tender_cash || 0),
+        tender_cash: selectedOrder.tender_cash,
+      };
+
+      const storeInfo = {
+        name: 'Binthanna Restaurant',
+        address: 'Kekirihena Mahaoya',
+        phone: '076 670 2231',
+        receiptFooter: 'Thank you for your visit!',
+      };
+
+      const ticketResult = ticketType === 'bar'
+        ? await htmlPrintService.printBarTicket(orderData, storeInfo)
+        : await htmlPrintService.printKitchenTicket(orderData, storeInfo);
+
+      if (ticketResult.success) {
+        toast.success(`${ticketType === 'bar' ? 'Bar' : 'Kitchen'} ticket printed successfully`);
+      } else {
+        toast.error(ticketResult.message || `${ticketType === 'bar' ? 'Bar' : 'Kitchen'} ticket printing failed`);
+      }
+    } catch (error) {
+      toast.error(`Failed to print ${ticketType} ticket: ${error.message}`);
+    }
+  };
+
   const handlePrintBill = async () => {
     if (!selectedOrder) return;
 
@@ -279,38 +315,25 @@ const OrderHistoryDialog = ({ open, onClose }) => {
         amountPaid: selectedOrder.is_card_payment
           ? parseFloat(selectedOrder.total_amount || 0)
           : parseFloat(selectedOrder.tender_cash || 0),
-        tender_cash: selectedOrder.tender_cash
+        tender_cash: selectedOrder.tender_cash,
       };
 
       const storeInfo = {
         name: 'Binthanna Restaurant',
         address: 'Kekirihena Mahaoya',
         phone: '076 670 2231',
-        receiptFooter: 'Thank you for your visit!'
+        receiptFooter: 'Thank you for your visit!',
       };
 
-      // Use the same printer selection path as Place Order printing.
-      const preferredPrinterName = 'POS80 Printer';
-      const savedPrinter = localStorage.getItem('selectedPrinter');
-      if (!savedPrinter) {
-        localStorage.setItem('selectedPrinter', preferredPrinterName);
-      }
-
-      let billResult;
-
-      if (htmlPrintService.canDirectPrint()) {
-        billResult = await htmlPrintService.printDirectThermal(orderData, storeInfo);
-      } else {
-        billResult = await htmlPrintService.printBillHTML(orderData, storeInfo);
-      }
+      const billResult = await htmlPrintService.printBillPreview(orderData, storeInfo);
 
       if (billResult.success) {
-        toast.success('Bill printed successfully');
+        toast.success('Bill preview opened');
       } else {
-        toast.error(billResult.message || 'Bill printing failed');
+        toast.error(billResult.message || 'Bill preview failed');
       }
     } catch (error) {
-      toast.error(`Failed to print bill: ${error.message}`);
+      toast.error(`Failed to open bill preview: ${error.message}`);
     }
   };
 
@@ -657,6 +680,23 @@ const OrderHistoryDialog = ({ open, onClose }) => {
                     size="small"
                   >
                     Print Bill
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    startIcon={<Restaurant />}
+                    onClick={() => handlePrintTicket('bar')}
+                    size="small"
+                  >
+                    Bar Ticket
+                  </Button>
+                  <Button
+                    variant="contained"
+                    startIcon={<Receipt />}
+                    onClick={() => handlePrintTicket('kitchen')}
+                    size="small"
+                  >
+                    Kitchen Ticket
                   </Button>
                 </>
               )}
