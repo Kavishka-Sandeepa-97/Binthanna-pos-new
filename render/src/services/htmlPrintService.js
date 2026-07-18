@@ -138,36 +138,36 @@ const buildReceiptHTML = (order = {}, storeInfo = {}, options = {}) => {
         color: #000;
         -webkit-print-color-adjust: exact;
       }
-      .receipt { width: 276px; padding: 4px; }
-      .receipt.slim-ticket { width: 276px; padding: 6px 4px 4px; }
+      .receipt { width: 258px; padding: 3px 2px 3px 2px; }
+      .receipt.slim-ticket { width: 258px; padding: 5px 2px 3px 2px; }
       .center { text-align: center; }
       .right { text-align: right; }
-      h2 { margin: 2px 0; font-size: 16px; font-weight: 900; letter-spacing: 0.4px; }
-      .small { font-size: 9px; }
+      h2 { margin: 1px 0; font-size: 15px; font-weight: 900; letter-spacing: 0.2px; }
+      .small { font-size: 8.5px; }
       table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-      .items-table col.item-col { width: 62%; }
-      .items-table col.qty-col { width: 15%; }
-      .items-table col.total-col { width: 23%; }
-      .slim-ticket .items-table col.item-col { width: 60%; }
+      .items-table col.item-col { width: 58%; }
+      .items-table col.qty-col { width: 14%; }
+      .items-table col.total-col { width: 28%; }
+      .slim-ticket .items-table col.item-col { width: 56%; }
       .slim-ticket .items-table col.qty-col { width: 14%; }
-      .slim-ticket .items-table col.total-col { width: 26%; }
-      .items-table thead th { font-size: 12px; font-weight: 900; padding-bottom: 2px; }
-      .items td { padding: 2px 1px; word-wrap: break-word; white-space: normal; font-size: 12px; }
+      .slim-ticket .items-table col.total-col { width: 30%; }
+      .items-table thead th { font-size: 11px; font-weight: 900; padding-bottom: 2px; }
+      .items td { padding: 2px 1px; word-wrap: break-word; white-space: normal; font-size: 11px; }
       .items td:first-child { word-break: break-word; }
       .items td:nth-child(2) { text-align: center; }
       .items td:nth-child(3) { text-align: right; white-space: nowrap; }
-      .disc-row td { font-size: 8px; color: #333; padding: 1px 0 3px 4px; font-weight: normal; }
-      .subtotal-row td { font-size: 9px; font-weight: 500; }
-      .discount-summary-row td { font-size: 10px; font-weight: 700; }
-      .discount-highlight { font-size: 10px; font-weight: 900; letter-spacing: 0.1px; }
-      .sep { border-top: 1px dashed #000; margin: 6px 0; }
-      .total-row td { font-size: 12px; font-weight: 900; white-space: nowrap; }
-      .change-row { font-size: 12px; font-weight: 900; }
-      .receipt-footer { text-align: center; margin-top: 8px; }
-      .ticket-title { margin: 2px 0 4px; font-size: 13px; font-weight: 900; letter-spacing: 0.8px; }
-      .order-barcode { text-align: center; margin-top: 6px; }
-      .order-barcode svg { display: block; margin: 0 auto; max-width: 150px; height: 18px; }
-      .order-barcode-number { margin-top: 1px; font-size: 9px; letter-spacing: 0.8px; }
+      .disc-row td { font-size: 7.5px; color: #333; padding: 1px 0 2px 3px; font-weight: normal; }
+      .subtotal-row td { font-size: 8.5px; font-weight: 500; }
+      .discount-summary-row td { font-size: 9px; font-weight: 700; }
+      .discount-highlight { font-size: 9px; font-weight: 900; letter-spacing: 0; }
+      .sep { border-top: 1px dashed #000; margin: 5px 0; }
+      .total-row td { font-size: 11px; font-weight: 900; white-space: nowrap; }
+      .change-row { font-size: 11px; font-weight: 900; }
+      .receipt-footer { text-align: center; margin-top: 6px; }
+      .ticket-title { margin: 1px 0 3px; font-size: 12px; font-weight: 900; letter-spacing: 0.4px; }
+      .order-barcode { text-align: center; margin-top: 5px; }
+      .order-barcode svg { display: block; margin: 0 auto; max-width: 135px; height: 17px; }
+      .order-barcode-number { margin-top: 0px; font-size: 8px; letter-spacing: 0.6px; }
     </style>
   `;
 
