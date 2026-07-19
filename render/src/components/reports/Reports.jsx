@@ -176,6 +176,30 @@ const Reports = () => {
           ).join('\n');
         filename = 'category_sales_report.csv';
         break;
+      case 'daily-orders-breakdown':
+        if (!dailyOrdersData || !dailyOrdersData.orders) return;
+        csvContent = 'Order #,Type,Payment,Staff,Amount,COGS,Profit,Items,Time\n' +
+          dailyOrdersData.orders.map(order => {
+            const orderTime = order.date ? new Date(order.date).toLocaleTimeString() : '-';
+            const itemCount = order.items ? order.items.length : 0;
+            const staffName = (order.staff_name || '').replace(/"/g, '""');
+            return `"${order.order_number}","${order.order_type}","${order.payment_type}","${staffName}",${order.total_amount},${order.total_cogs},${order.total_profit},${itemCount},"${orderTime}"`;
+          }).join('\n');
+        filename = `orders_breakdown_${selectedDate || 'report'}.csv`;
+        break;
+      case 'daily-items-sold':
+        if (!dailyOrdersData || !dailyOrdersData.orders) return;
+        csvContent = 'Order #,Product,Variant,Qty,Unit Price,Line Total,Category\n' +
+          dailyOrdersData.orders.flatMap(order =>
+            (order.items || []).map(item => {
+              const itemName = (item.item_name || '').replace(/"/g, '""');
+              const variantName = (item.variant_name || '').replace(/"/g, '""');
+              const categoryName = (item.category_name || '').replace(/"/g, '""');
+              return `"${order.order_number}","${itemName}","${variantName}",${item.qty},${item.unit_price},${item.line_total},"${categoryName}"`;
+            })
+          ).join('\n');
+        filename = `items_sold_${selectedDate || 'report'}.csv`;
+        break;
     }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -361,7 +385,20 @@ const Reports = () => {
                     />
                   </LineChart>
                 </ResponsiveContainer>
-                <TableContainer component={Paper} sx={{ mt: 2 }}>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mt={4} mb={1.5}>
+                  <Typography variant="h6">Revenue Trend Details</Typography>
+                  <Tooltip title="Download Excel/CSV">
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<DownloadIcon />}
+                      onClick={() => handleDownloadReport('revenue')}
+                    >
+                      Download Table
+                    </Button>
+                  </Tooltip>
+                </Box>
+                <TableContainer component={Paper}>
                   <Table>
                     <TableHead>
                       <TableRow>
@@ -831,7 +868,19 @@ const Reports = () => {
                 )}
 
                 {/* Orders Table */}
-                <Typography variant="h6" sx={{ mb: 2 }}>Orders Breakdown</Typography>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mt={3} mb={1.5}>
+                  <Typography variant="h6">Orders Breakdown</Typography>
+                  <Tooltip title="Download Excel/CSV">
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<DownloadIcon />}
+                      onClick={() => handleDownloadReport('daily-orders-breakdown')}
+                    >
+                      Download Orders
+                    </Button>
+                  </Tooltip>
+                </Box>
                 <TableContainer component={Paper}>
                   <Table size="small">
                     <TableHead>
@@ -899,8 +948,20 @@ const Reports = () => {
 
                 {/* Detailed Items View */}
                 {dailyOrdersData.orders && dailyOrdersData.orders.length > 0 && (
-                  <Box sx={{ mt: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2 }}>Items Sold</Typography>
+                  <Box sx={{ mt: 4 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+                      <Typography variant="h6">Items Sold</Typography>
+                      <Tooltip title="Download Excel/CSV">
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<DownloadIcon />}
+                          onClick={() => handleDownloadReport('daily-items-sold')}
+                        >
+                          Download Items
+                        </Button>
+                      </Tooltip>
+                    </Box>
                     <TableContainer component={Paper}>
                       <Table size="small">
                         <TableHead>
