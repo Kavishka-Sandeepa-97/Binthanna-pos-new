@@ -65,6 +65,7 @@ const Reports = () => {
   const [startDate, setStartDate] = useState(dayjs().subtract(1, 'month'));
   const [endDate, setEndDate] = useState(dayjs());
   const [revenueData, setRevenueData] = useState([]);
+  const [barRevenueData, setBarRevenueData] = useState([]);
   const [topProductsData, setTopProductsData] = useState([]);
   const [categorySalesData, setCategorySalesData] = useState([]);
   const [productDetailsData, setProductDetailsData] = useState([]);
@@ -72,6 +73,7 @@ const Reports = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [activeDetailCategory, setActiveDetailCategory] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [dailyOrdersData, setDailyOrdersData] = useState(null);
   const [dailyOrdersLoading, setDailyOrdersLoading] = useState(false);
@@ -89,8 +91,9 @@ const Reports = () => {
       }
       // For 'all' period, we don't add any date parameters
 
-      const [revenueRes, topProductsRes, categorySalesRes, productDetailsRes, inventoryValuationRes] = await Promise.all([
+      const [revenueRes, barRevenueRes, topProductsRes, categorySalesRes, productDetailsRes, inventoryValuationRes] = await Promise.all([
         reportsAPI.getRevenue(params),
+        reportsAPI.getRevenue({ ...params, category: 'BAR' }),
         reportsAPI.getTopProducts({ ...params, limit: 10 }),
         reportsAPI.getCategorySales(params),
         reportsAPI.getTopProducts({ ...params, limit: 100 }), // Get all products for details view
@@ -98,6 +101,7 @@ const Reports = () => {
       ]);
 
       setRevenueData(revenueRes.data || []);
+      setBarRevenueData(barRevenueRes.data || []);
       setTopProductsData(topProductsRes.data || []);
       setCategorySalesData(categorySalesRes.data || []);
       setProductDetailsData(productDetailsRes.data || []);
@@ -132,14 +136,19 @@ const Reports = () => {
     setPeriod(event.target.value);
   };
 
-  const handleRevenueRowClick = async (rowData) => {
+  const handleRevenueRowClick = async (rowData, category = null) => {
     setSelectedDate(rowData.period);
+    setActiveDetailCategory(category);
     setDetailDialogOpen(true);
     setDailyOrdersData(null);
     setDailyOrdersLoading(true);
     
     try {
-      const result = await reportsAPI.getDailyOrders(rowData.period);
+      const params = {};
+      if (category) {
+        params.category = category;
+      }
+      const result = await reportsAPI.getDailyOrders(rowData.period, params);
       setDailyOrdersData(result);
     } catch (error) {
       console.error('Error fetching daily orders:', error);
@@ -161,6 +170,13 @@ const Reports = () => {
             `${row.period},${row.order_count},${row.total_revenue},${row.total_cogs},${row.total_profit},${row.margin_percent},${row.min_order},${row.max_order}`
           ).join('\n');
         filename = 'revenue_report.csv';
+        break;
+      case 'bar-revenue':
+        csvContent = 'Period,Orders,Revenue,COGS,Profit,Margin %,Min Order,Max Order\n' +
+          barRevenueData.map(row =>
+            `${row.period},${row.order_count},${row.total_revenue},${row.total_cogs},${row.total_profit},${row.margin_percent},${row.min_order},${row.max_order}`
+          ).join('\n');
+        filename = 'bar_revenue_report.csv';
         break;
       case 'top-products':
         csvContent = 'Product,Variant,Barcode,Quantity,Revenue,Orders\n' +
@@ -185,7 +201,7 @@ const Reports = () => {
             const staffName = (order.staff_name || '').replace(/"/g, '""');
             return `"${order.order_number}","${order.order_type}","${order.payment_type}","${staffName}",${order.total_amount},${order.total_cogs},${order.total_profit},${itemCount},"${orderTime}"`;
           }).join('\n');
-        filename = `orders_breakdown_${selectedDate || 'report'}.csv`;
+        filename = `orders_breakdown_${activeDetailCategory ? activeDetailCategory.toLowerCase() + '_' : ''}${selectedDate || 'report'}.csv`;
         break;
       case 'daily-items-sold':
         if (!dailyOrdersData || !dailyOrdersData.orders) return;
@@ -198,7 +214,7 @@ const Reports = () => {
               return `"${order.order_number}","${itemName}","${variantName}",${item.qty},${item.unit_price},${item.line_total},"${categoryName}"`;
             })
           ).join('\n');
-        filename = `items_sold_${selectedDate || 'report'}.csv`;
+        filename = `items_sold_${activeDetailCategory ? activeDetailCategory.toLowerCase() + '_' : ''}${selectedDate || 'report'}.csv`;
         break;
     }
 
@@ -225,6 +241,14 @@ const Reports = () => {
   const totalRevenue = revenueData.reduce((sum, item) => sum + parseFloat(item.total_revenue || 0), 0);
   const totalOrders = revenueData.reduce((sum, item) => sum + parseInt(item.order_count || 0), 0);
   const totalProfit = revenueData.reduce((sum, item) => sum + parseFloat(item.total_profit || 0), 0);
+
+  const totalBarRevenue = barRevenueData.reduce((sum, item) => sum + parseFloat(item.total_revenue || 0), 0);
+  const totalBarOrders = barRevenueData.reduce((sum, item) => sum + parseInt(item.order_count || 0), 0);
+  const totalBarProfit = barRevenueData.reduce((sum, item) => sum + parseFloat(item.total_profit || 0), 0);
+
+  const displayRevenue = activeTab === 1 ? totalBarRevenue : totalRevenue;
+  const displayOrders = activeTab === 1 ? totalBarOrders : totalOrders;
+  const displayProfit = activeTab === 1 ? totalBarProfit : totalProfit;
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -294,7 +318,7 @@ const Reports = () => {
                   <Typography variant="h6">Total Revenue</Typography>
                 </Box>
                 <Typography variant="h4" color="primary">
-                  {formatCurrency(totalRevenue)}
+                  {formatCurrency(displayRevenue)}
                 </Typography>
               </CardContent>
             </Card>
@@ -307,7 +331,7 @@ const Reports = () => {
                   <Typography variant="h6">Total Orders</Typography>
                 </Box>
                 <Typography variant="h4" color="secondary">
-                  {totalOrders}
+                  {displayOrders}
                 </Typography>
               </CardContent>
             </Card>
@@ -316,11 +340,11 @@ const Reports = () => {
             <Card>
               <CardContent>
                 <Box display="flex" alignItems="center" mb={1}>
-                  <CategoryIcon color={totalProfit >= 0 ? 'success' : 'error'} sx={{ mr: 1 }} />
+                  <CategoryIcon color={displayProfit >= 0 ? 'success' : 'error'} sx={{ mr: 1 }} />
                   <Typography variant="h6">Overall Profit</Typography>
                 </Box>
-                <Typography variant="h4" color={totalProfit >= 0 ? 'success.main' : 'error.main'}>
-                  {formatCurrency(totalProfit)}
+                <Typography variant="h4" color={displayProfit >= 0 ? 'success.main' : 'error.main'}>
+                  {formatCurrency(displayProfit)}
                 </Typography>
               </CardContent>
             </Card>
@@ -331,6 +355,7 @@ const Reports = () => {
         <Card>
           <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
             <Tab label="Revenue Trend" />
+            <Tab label="Bar Revenue Trend" />
             <Tab label="Top Products" />
             <Tab label="Category Sales" />
             <Tab label="Product Details" />
@@ -447,6 +472,112 @@ const Reports = () => {
             {activeTab === 1 && (
               <Box>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                  <Typography variant="h6">Bar Revenue Over Time</Typography>
+                  <Tooltip title="Download CSV">
+                    <IconButton onClick={() => handleDownloadReport('bar-revenue')}>
+                      <DownloadIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={barRevenueData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="period" />
+                    <YAxis tickFormatter={formatCurrency} width={80} />
+                    <RechartsTooltip
+                      formatter={(value, name) => {
+                        if (name === 'Orders') {
+                          return [Number(value || 0), name];
+                        }
+                        return [formatCurrency(value), name];
+                      }}
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="total_revenue"
+                      stroke="#8884d8"
+                      name="Revenue"
+                      strokeWidth={2}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="order_count"
+                      stroke="#82ca9d"
+                      name="Orders"
+                      strokeWidth={2}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="total_profit"
+                      stroke="#ff7043"
+                      name="Profit"
+                      strokeWidth={2}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mt={4} mb={1.5}>
+                  <Typography variant="h6">Bar Revenue Trend Details</Typography>
+                  <Tooltip title="Download Excel/CSV">
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<DownloadIcon />}
+                      onClick={() => handleDownloadReport('bar-revenue')}
+                    >
+                      Download Table
+                    </Button>
+                  </Tooltip>
+                </Box>
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Period</TableCell>
+                        <TableCell align="right">Orders</TableCell>
+                        <TableCell align="right">Revenue</TableCell>
+                        <TableCell align="right">COGS</TableCell>
+                        <TableCell align="right">Profit</TableCell>
+                        <TableCell align="right">Margin %</TableCell>
+                        <TableCell align="right">Min Order</TableCell>
+                        <TableCell align="right">Max Order</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {barRevenueData.map((row) => (
+                        <TableRow 
+                          key={row.period}
+                          onClick={() => handleRevenueRowClick(row, 'BAR')}
+                          sx={{
+                            cursor: 'pointer',
+                            '&:hover': {
+                              backgroundColor: '#f5f5f5',
+                            },
+                          }}
+                        >
+                          <TableCell>{row.period}</TableCell>
+                          <TableCell align="right">{row.order_count}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.total_revenue)}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.total_cogs)}</TableCell>
+                          <TableCell align="right">
+                            <Typography fontWeight="bold" color={Number(row.total_profit || 0) >= 0 ? 'success.main' : 'error.main'}>
+                              {formatCurrency(row.total_profit)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">{Number(row.margin_percent || 0).toFixed(2)}%</TableCell>
+                          <TableCell align="right">{formatCurrency(row.min_order)}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.max_order)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+
+            {activeTab === 2 && (
+              <Box>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                   <Typography variant="h6">Top Selling Products</Typography>
                   <Tooltip title="Download CSV">
                     <IconButton onClick={() => handleDownloadReport('top-products')}>
@@ -494,7 +625,7 @@ const Reports = () => {
               </Box>
             )}
 
-            {activeTab === 2 && (
+            {activeTab === 3 && (
               <Box>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                   <Typography variant="h6">Sales by Category</Typography>
@@ -563,7 +694,7 @@ const Reports = () => {
               </Box>
             )}
 
-            {activeTab === 3 && (
+            {activeTab === 4 && (
               <Box>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                   <Typography variant="h6">Item Variant Sales Details</Typography>
@@ -676,7 +807,7 @@ const Reports = () => {
               </Box>
             )}
 
-            {activeTab === 4 && (
+            {activeTab === 5 && (
               <Box>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                   <Box>

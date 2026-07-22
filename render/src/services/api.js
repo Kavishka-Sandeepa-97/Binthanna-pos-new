@@ -801,8 +801,9 @@ export const reportsAPI = {
     return makeRequest(`/reports/stock/valuation?${queryString}`);
   },
 
-  getDailyOrders: async (date) => {
-    return makeRequest(`/reports/pos/daily-orders/${date}`);
+  getDailyOrders: async (date, params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return makeRequest(`/reports/pos/daily-orders/${date}${queryString ? `?${queryString}` : ''}`);
   },
 };
 

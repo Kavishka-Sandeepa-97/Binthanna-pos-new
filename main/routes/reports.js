@@ -85,7 +85,7 @@ const completedSalesCte = `
 // Revenue report
 router.get('/pos/revenue', (req, res) => {
   const db = getDatabase();
-  const { period, start_date, end_date, group_by = 'day' } = req.query;
+  const { period, start_date, end_date, group_by = 'day', category } = req.query;
 
   const { start, end } = getDateRange(period, start_date, end_date);
 
@@ -105,46 +105,98 @@ router.get('/pos/revenue', (req, res) => {
   }
 
   try {
-    const query = `
-      WITH filtered_orders AS (
+    let rows;
+    if (category) {
+      const query = `
+        WITH RECURSIVE target_categories AS (
+          SELECT id FROM category WHERE UPPER(name) = UPPER(?)
+          UNION ALL
+          SELECT c.id FROM category c
+          JOIN target_categories tc ON c.parent_id = tc.id
+        ),
+        filtered_items AS (
+          SELECT
+            ivo.order_id,
+            ivo.qty * ivo.unit_price AS line_revenue,
+            ivo.qty * COALESCE(sb.buy_price, 0) AS line_cogs
+          FROM item_variant_order ivo
+          JOIN item_variant iv ON ivo.item_variant_id = iv.id
+          JOIN item i ON iv.item_id = i.id
+          LEFT JOIN stock_batch sb ON ivo.stock_batch_id = sb.id
+          WHERE i.category_id IN (SELECT id FROM target_categories)
+        ),
+        category_orders AS (
+          SELECT
+            o.id,
+            ${groupFormat} AS period,
+            SUM(fi.line_revenue) AS order_category_revenue,
+            SUM(fi.line_cogs) AS order_category_cogs
+          FROM orders o
+          JOIN filtered_items fi ON o.id = fi.order_id
+          WHERE o.status = 'completed'
+            AND DATE(o.date) >= ?
+            AND DATE(o.date) <= ?
+          GROUP BY o.id
+        )
         SELECT
-          id,
-          total_amount,
-          ${groupFormat} AS period
-        FROM orders
-        WHERE status = 'completed'
-          AND DATE(date) >= ?
-          AND DATE(date) <= ?
-      ),
-      order_costs AS (
+          co.period AS period,
+          COUNT(DISTINCT co.id) AS order_count,
+          ROUND(SUM(co.order_category_revenue), 2) AS total_revenue,
+          ROUND(SUM(co.order_category_cogs), 2) AS total_cogs,
+          ROUND(SUM(co.order_category_revenue - co.order_category_cogs), 2) AS total_profit,
+          ROUND(MIN(co.order_category_revenue), 2) AS min_order,
+          ROUND(MAX(co.order_category_revenue), 2) AS max_order,
+          CASE
+            WHEN SUM(co.order_category_revenue) != 0
+            THEN ROUND((SUM(co.order_category_revenue - co.order_category_cogs) / SUM(co.order_category_revenue)) * 100, 2)
+            ELSE 0
+          END AS margin_percent
+        FROM category_orders co
+        GROUP BY co.period
+        ORDER BY period DESC
+      `;
+      rows = db.prepare(query).all(category, start, end);
+    } else {
+      const query = `
+        WITH filtered_orders AS (
+          SELECT
+            id,
+            total_amount,
+            ${groupFormat} AS period
+          FROM orders
+          WHERE status = 'completed'
+            AND DATE(date) >= ?
+            AND DATE(date) <= ?
+        ),
+        order_costs AS (
+          SELECT
+            ivo.order_id,
+            SUM(ivo.qty * COALESCE(sb.buy_price, 0)) AS total_cogs
+          FROM item_variant_order ivo
+          JOIN filtered_orders fo ON fo.id = ivo.order_id
+          LEFT JOIN stock_batch sb ON ivo.stock_batch_id = sb.id
+          GROUP BY ivo.order_id
+        )
         SELECT
-          ivo.order_id,
-          SUM(ivo.qty * COALESCE(sb.buy_price, 0)) AS total_cogs
-        FROM item_variant_order ivo
-        JOIN filtered_orders fo ON fo.id = ivo.order_id
-        LEFT JOIN stock_batch sb ON ivo.stock_batch_id = sb.id
-        GROUP BY ivo.order_id
-      )
-      SELECT
-        fo.period AS period,
-        COUNT(DISTINCT fo.id) AS order_count,
-        ROUND(SUM(fo.total_amount), 2) AS total_revenue,
-        ROUND(SUM(COALESCE(oc.total_cogs, 0)), 2) AS total_cogs,
-        ROUND(SUM(fo.total_amount - COALESCE(oc.total_cogs, 0)), 2) AS total_profit,
-        ROUND(MIN(fo.total_amount), 2) AS min_order,
-        ROUND(MAX(fo.total_amount), 2) AS max_order,
-        CASE
-          WHEN SUM(fo.total_amount) != 0
-          THEN ROUND((SUM(fo.total_amount - COALESCE(oc.total_cogs, 0)) / SUM(fo.total_amount)) * 100, 2)
-          ELSE 0
-        END AS margin_percent
-      FROM filtered_orders fo
-      LEFT JOIN order_costs oc ON oc.order_id = fo.id
-      GROUP BY fo.period
-      ORDER BY period DESC
-    `;
-
-    const rows = db.prepare(query).all(start, end);
+          fo.period AS period,
+          COUNT(DISTINCT fo.id) AS order_count,
+          ROUND(SUM(fo.total_amount), 2) AS total_revenue,
+          ROUND(SUM(COALESCE(oc.total_cogs, 0)), 2) AS total_cogs,
+          ROUND(SUM(fo.total_amount - COALESCE(oc.total_cogs, 0)), 2) AS total_profit,
+          ROUND(MIN(fo.total_amount), 2) AS min_order,
+          ROUND(MAX(fo.total_amount), 2) AS max_order,
+          CASE
+            WHEN SUM(fo.total_amount) != 0
+            THEN ROUND((SUM(fo.total_amount - COALESCE(oc.total_cogs, 0)) / SUM(fo.total_amount)) * 100, 2)
+            ELSE 0
+          END AS margin_percent
+        FROM filtered_orders fo
+        LEFT JOIN order_costs oc ON oc.order_id = fo.id
+        GROUP BY fo.period
+        ORDER BY period DESC
+      `;
+      rows = db.prepare(query).all(start, end);
+    }
     res.json({ data: rows, dateRange: { start, end } });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -472,6 +524,7 @@ router.get('/stock/valuation', (req, res) => {
 router.get('/pos/daily-orders/:date', (req, res) => {
   const db = getDatabase();
   const { date } = req.params;
+  const { category } = req.query;
 
   try {
     const selectedDate = new Date(date + 'T00:00:00');
@@ -481,17 +534,41 @@ router.get('/pos/daily-orders/:date', (req, res) => {
 
     const dateStart = formatLocalDate(new Date(selectedDate.getTime() - (selectedDate.getTimezoneOffset() * 60000)));
 
-    const orderCosts = db.prepare(`
-      SELECT
-        o.id AS order_id,
-        ROUND(SUM(ivo.qty * COALESCE(sb.buy_price, 0)), 2) AS total_cogs
-      FROM orders o
-      JOIN item_variant_order ivo ON o.id = ivo.order_id
-      LEFT JOIN stock_batch sb ON ivo.stock_batch_id = sb.id
-      WHERE o.status = 'completed'
-        AND DATE(o.date) = ?
-      GROUP BY o.id
-    `).all(dateStart);
+    let orderCosts;
+    if (category) {
+      orderCosts = db.prepare(`
+        WITH RECURSIVE target_categories AS (
+          SELECT id FROM category WHERE UPPER(name) = UPPER(?)
+          UNION ALL
+          SELECT c.id FROM category c
+          JOIN target_categories tc ON c.parent_id = tc.id
+        )
+        SELECT
+          o.id AS order_id,
+          ROUND(SUM(ivo.qty * COALESCE(sb.buy_price, 0)), 2) AS total_cogs
+        FROM orders o
+        JOIN item_variant_order ivo ON o.id = ivo.order_id
+        LEFT JOIN stock_batch sb ON ivo.stock_batch_id = sb.id
+        JOIN item_variant iv ON ivo.item_variant_id = iv.id
+        JOIN item i ON iv.item_id = i.id
+        WHERE o.status = 'completed'
+          AND DATE(o.date) = ?
+          AND i.category_id IN (SELECT id FROM target_categories)
+        GROUP BY o.id
+      `).all(category, dateStart);
+    } else {
+      orderCosts = db.prepare(`
+        SELECT
+          o.id AS order_id,
+          ROUND(SUM(ivo.qty * COALESCE(sb.buy_price, 0)), 2) AS total_cogs
+        FROM orders o
+        JOIN item_variant_order ivo ON o.id = ivo.order_id
+        LEFT JOIN stock_batch sb ON ivo.stock_batch_id = sb.id
+        WHERE o.status = 'completed'
+          AND DATE(o.date) = ?
+        GROUP BY o.id
+      `).all(dateStart);
+    }
 
     const orderCostMap = orderCosts.reduce((acc, row) => {
       acc[row.order_id] = Number(row.total_cogs || 0);
@@ -499,50 +576,120 @@ router.get('/pos/daily-orders/:date', (req, res) => {
     }, {});
 
     // Fetch all orders for the date
-    const orders = db.prepare(`
-      SELECT
-        o.id,
-        'ORD-' || CAST(o.id AS TEXT) as order_number,
-        o.status,
-        o.total_amount,
-        COALESCE(o.discount_value, 0) as discount_amount,
-        o.tender_cash,
-        COALESCE(o.tender_cash, 0) - o.total_amount as change_amount,
-        CASE WHEN (SELECT COUNT(*) FROM returns r WHERE r.order_id = o.id) > 0 THEN 1 ELSE 0 END as is_return,
-        o.is_card_payment,
-        o.customer_name,
-        o.date,
-        o.user_id as staff_id,
-        s.name as staff_name
-      FROM orders o
-      LEFT JOIN users s ON o.user_id = s.id
-      WHERE o.status = 'completed'
-        AND DATE(o.date) = ?
-      ORDER BY o.date DESC
-    `).all(dateStart);
+    let orders;
+    if (category) {
+      orders = db.prepare(`
+        WITH RECURSIVE target_categories AS (
+          SELECT id FROM category WHERE UPPER(name) = UPPER(?)
+          UNION ALL
+          SELECT c.id FROM category c
+          JOIN target_categories tc ON c.parent_id = tc.id
+        )
+        SELECT DISTINCT
+          o.id,
+          'ORD-' || CAST(o.id AS TEXT) as order_number,
+          o.status,
+          (SELECT SUM(ivo2.qty * ivo2.unit_price) 
+           FROM item_variant_order ivo2 
+           JOIN item_variant iv2 ON ivo2.item_variant_id = iv2.id
+           JOIN item i2 ON iv2.item_id = i2.id
+           WHERE ivo2.order_id = o.id AND i2.category_id IN (SELECT id FROM target_categories)) AS total_amount,
+          COALESCE(o.discount_value, 0) as discount_amount,
+          o.tender_cash,
+          COALESCE(o.tender_cash, 0) - o.total_amount as change_amount,
+          CASE WHEN (SELECT COUNT(*) FROM returns r WHERE r.order_id = o.id) > 0 THEN 1 ELSE 0 END as is_return,
+          o.is_card_payment,
+          o.customer_name,
+          o.date,
+          o.user_id as staff_id,
+          s.name as staff_name
+        FROM orders o
+        LEFT JOIN users s ON o.user_id = s.id
+        JOIN item_variant_order ivo ON o.id = ivo.order_id
+        JOIN item_variant iv ON ivo.item_variant_id = iv.id
+        JOIN item i ON iv.item_id = i.id
+        WHERE o.status = 'completed'
+          AND DATE(o.date) = ?
+          AND i.category_id IN (SELECT id FROM target_categories)
+        ORDER BY o.date DESC
+      `).all(category, dateStart);
+    } else {
+      orders = db.prepare(`
+        SELECT
+          o.id,
+          'ORD-' || CAST(o.id AS TEXT) as order_number,
+          o.status,
+          o.total_amount,
+          COALESCE(o.discount_value, 0) as discount_amount,
+          o.tender_cash,
+          COALESCE(o.tender_cash, 0) - o.total_amount as change_amount,
+          CASE WHEN (SELECT COUNT(*) FROM returns r WHERE r.order_id = o.id) > 0 THEN 1 ELSE 0 END as is_return,
+          o.is_card_payment,
+          o.customer_name,
+          o.date,
+          o.user_id as staff_id,
+          s.name as staff_name
+        FROM orders o
+        LEFT JOIN users s ON o.user_id = s.id
+        WHERE o.status = 'completed'
+          AND DATE(o.date) = ?
+        ORDER BY o.date DESC
+      `).all(dateStart);
+    }
 
     // For each order, fetch its items
     const ordersWithItems = orders.map(order => {
-      const items = db.prepare(`
-        SELECT
-          ivo.id as item_variant_order_id,
-          ivo.item_variant_id,
-          ivo.qty,
-          ivo.unit_price,
-          (ivo.qty * ivo.unit_price) as line_total,
-          iv.barcode,
-          i.name as item_name,
-          v.variant_name,
-          c.name as category_name,
-          b.brand_name
-        FROM item_variant_order ivo
-        JOIN item_variant iv ON ivo.item_variant_id = iv.id
-        JOIN item i ON iv.item_id = i.id
-        JOIN variant v ON iv.variant_id = v.id
-        JOIN category c ON i.category_id = c.id
-        LEFT JOIN brand b ON i.brand_id = b.id
-        WHERE ivo.order_id = ?
-      `).all(order.id);
+      let items;
+      if (category) {
+        items = db.prepare(`
+          WITH RECURSIVE target_categories AS (
+            SELECT id FROM category WHERE UPPER(name) = UPPER(?)
+            UNION ALL
+            SELECT c.id FROM category c
+            JOIN target_categories tc ON c.parent_id = tc.id
+          )
+          SELECT
+            ivo.id as item_variant_order_id,
+            ivo.item_variant_id,
+            ivo.qty,
+            ivo.unit_price,
+            (ivo.qty * ivo.unit_price) as line_total,
+            iv.barcode,
+            i.name as item_name,
+            v.variant_name,
+            c.name as category_name,
+            b.brand_name
+          FROM item_variant_order ivo
+          JOIN item_variant iv ON ivo.item_variant_id = iv.id
+          JOIN item i ON iv.item_id = i.id
+          JOIN variant v ON iv.variant_id = v.id
+          JOIN category c ON i.category_id = c.id
+          LEFT JOIN brand b ON i.brand_id = b.id
+          WHERE ivo.order_id = ?
+            AND i.category_id IN (SELECT id FROM target_categories)
+        `).all(category, order.id);
+      } else {
+        items = db.prepare(`
+          SELECT
+            ivo.id as item_variant_order_id,
+            ivo.item_variant_id,
+            ivo.qty,
+            ivo.unit_price,
+            (ivo.qty * ivo.unit_price) as line_total,
+            iv.barcode,
+            i.name as item_name,
+            v.variant_name,
+            c.name as category_name,
+            b.brand_name
+          FROM item_variant_order ivo
+          JOIN item_variant iv ON ivo.item_variant_id = iv.id
+          JOIN item i ON iv.item_id = i.id
+          JOIN variant v ON iv.variant_id = v.id
+          JOIN category c ON i.category_id = c.id
+          LEFT JOIN brand b ON i.brand_id = b.id
+          WHERE ivo.order_id = ?
+        `).all(order.id);
+      }
 
       const totalCogs = Number(orderCostMap[order.id] || 0);
       const totalRevenue = Number(order.total_amount || 0);
@@ -559,21 +706,63 @@ router.get('/pos/daily-orders/:date', (req, res) => {
     });
 
     // Calculate summary for the day
-    const summary = db.prepare(`
-      SELECT
-        COUNT(*) as total_orders,
-        SUM(total_amount) as total_revenue,
-        SUM(CASE WHEN is_card_payment = 0 THEN total_amount ELSE 0 END) as cash_revenue,
-        SUM(CASE WHEN is_card_payment = 1 THEN total_amount ELSE 0 END) as card_revenue,
-        (SELECT COALESCE(SUM(total_refund_amount), 0) FROM returns r WHERE DATE(r.created_at) = ?) as return_revenue,
-        SUM(total_amount) as regular_revenue,
-        MIN(total_amount) as min_order,
-        MAX(total_amount) as max_order,
-        ROUND(AVG(total_amount), 2) as avg_order
-      FROM orders
-      WHERE status = 'completed'
-        AND DATE(date) = ?
-    `).get(dateStart, dateStart);
+    let summary;
+    if (category) {
+      summary = db.prepare(`
+        WITH RECURSIVE target_categories AS (
+          SELECT id FROM category WHERE UPPER(name) = UPPER(?)
+          UNION ALL
+          SELECT c.id FROM category c
+          JOIN target_categories tc ON c.parent_id = tc.id
+        ),
+        order_bar_amounts AS (
+          SELECT 
+            o.id,
+            o.is_card_payment,
+            SUM(ivo.qty * ivo.unit_price) as order_bar_amount
+          FROM orders o
+          JOIN item_variant_order ivo ON o.id = ivo.order_id
+          JOIN item_variant iv ON ivo.item_variant_id = iv.id
+          JOIN item i ON iv.item_id = i.id
+          WHERE o.status = 'completed'
+            AND DATE(o.date) = ?
+            AND i.category_id IN (SELECT id FROM target_categories)
+          GROUP BY o.id
+        )
+        SELECT
+          COUNT(*) as total_orders,
+          SUM(order_bar_amount) as total_revenue,
+          SUM(CASE WHEN is_card_payment = 0 THEN order_bar_amount ELSE 0 END) as cash_revenue,
+          SUM(CASE WHEN is_card_payment = 1 THEN order_bar_amount ELSE 0 END) as card_revenue,
+          (SELECT COALESCE(SUM(r.total_refund_amount), 0) 
+           FROM returns r 
+           JOIN item_variant_order ivo ON r.item_variant_order_id = ivo.id
+           JOIN item_variant iv ON ivo.item_variant_id = iv.id
+           JOIN item i ON iv.item_id = i.id
+           WHERE DATE(r.created_at) = ? AND i.category_id IN (SELECT id FROM target_categories)) as return_revenue,
+          SUM(order_bar_amount) as regular_revenue,
+          MIN(order_bar_amount) as min_order,
+          MAX(order_bar_amount) as max_order,
+          ROUND(AVG(order_bar_amount), 2) as avg_order
+        FROM order_bar_amounts
+      `).get(category, dateStart, dateStart);
+    } else {
+      summary = db.prepare(`
+        SELECT
+          COUNT(*) as total_orders,
+          SUM(total_amount) as total_revenue,
+          SUM(CASE WHEN is_card_payment = 0 THEN total_amount ELSE 0 END) as cash_revenue,
+          SUM(CASE WHEN is_card_payment = 1 THEN total_amount ELSE 0 END) as card_revenue,
+          (SELECT COALESCE(SUM(total_refund_amount), 0) FROM returns r WHERE DATE(r.created_at) = ?) as return_revenue,
+          SUM(total_amount) as regular_revenue,
+          MIN(total_amount) as min_order,
+          MAX(total_amount) as max_order,
+          ROUND(AVG(total_amount), 2) as avg_order
+        FROM orders
+        WHERE status = 'completed'
+          AND DATE(date) = ?
+      `).get(dateStart, dateStart);
+    }
 
     const summaryRevenue = Number(summary?.total_revenue || 0);
     const summaryCogs = Number(
